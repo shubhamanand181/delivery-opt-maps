@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+sklearn.cluster
+DBSCAN
+geopy.distance
+great_circle
+pulp
+os
+openpyxl
