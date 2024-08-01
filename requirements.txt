@@ -1,7 +1,7 @@
 streamlit
 pandas
 numpy
-sklearn.cluster
+scikit-learn
 DBSCAN
 geopy.distance
 great_circle
