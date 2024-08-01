@@ -3,7 +3,7 @@ pandas
 numpy
 scikit-learn
 DBSCAN
-geopy.distance
+geopy
 great_circle
 pulp
 os
