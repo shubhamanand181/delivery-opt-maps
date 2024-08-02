@@ -181,7 +181,7 @@ if uploaded_file is not None:
                 distance_matrix = calculate_distance_matrix(df_vehicle)
 
                 # Perform DBSCAN clustering
-                db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+                db = DBSCAN(eps=0.5 min_samples=1, metric='precomputed')
                 db.fit(distance_matrix)
                 labels = db.labels_
                 df_vehicle['Cluster'] = labels
@@ -227,7 +227,7 @@ if uploaded_file is not None:
 
             # Generate Excel file and provide download link
             excel_file_path = generate_excel(vehicle_routes, summary_df)
-            st.write(f"[Download the optimized routes and summary]({excel_file_path})")
+            st.write(f"[Download the optimized routes and summary](/{excel_file_path})")
 
         # Define function to render a map for a cluster
         def render_map(df, title):
