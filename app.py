@@ -239,6 +239,7 @@ if uploaded_file is not None:
             for i, row in df.iterrows():
                 gmap.text(row['Latitude'], row['Longitude'], row['Party'])
             file_path = f'/mnt/data/{title}.html'
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             gmap.draw(file_path)
             st.write(f"[View {title} Map]({file_path})")
 
