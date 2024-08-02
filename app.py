@@ -2,34 +2,34 @@ import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
-import streamlit as st
-import os
 import pulp
+import streamlit as st
 import requests
+from io import BytesIO
+import os
 
 # Load environment variables
-google_maps_api_key = st.secrets["GOOGLE_MAPS_API_KEY"]
+from dotenv import load_dotenv
+load_dotenv()
 
-# Title for the Streamlit App
-st.title("Delivery Optimization and Route Generation")
+# Define the Google Maps API key
+google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 
-# File uploader for user to upload the delivery data
-uploaded_file = st.file_uploader("Upload your delivery data Excel file", type=["xlsx"])
+# Streamlit app title
+st.title("Delivery Optimization and Route Planning")
 
-# Scenario options for load optimization
-scenario_options = ["Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3"]
-selected_scenario = st.selectbox("Select a scenario for load optimization", scenario_options)
+# Upload the delivery data file
+uploaded_file = st.file_uploader("Choose an Excel file with delivery data", type="xlsx")
 
-# If a file is uploaded, process it
 if uploaded_file is not None:
-    # Load the Excel file
+    # Load data from the provided file
     df_locations = pd.read_excel(uploaded_file)
 
     # Display the column names to verify
-    st.write("Column Names:", df_locations.columns.tolist())
+    st.write("Column Names:", df_locations.columns)
 
     # Check the first few rows of the DataFrame
-    st.write("First few rows of the data:", df_locations.head())
+    st.write(df_locations.head())
 
     # Ensure column names are as expected
     expected_columns = ['Party', 'Latitude', 'Longitude', 'Weight (KG)']
@@ -55,21 +55,25 @@ if uploaded_file is not None:
     st.write(f"Type B Deliveries (2-10 kg): {len(D_b)}")
     st.write(f"Type C Deliveries (10-200 kg): {len(D_c)}")
 
+    # Select the scenario
+    scenarios = ["Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3"]
+    selected_scenario = st.selectbox("Select Scenario", scenarios)
+
     # Define the load optimization function
     def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
+        lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
+        V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
+        V2 = pulp.LpVariable('V2', lowBound=0, cat='Integer')
+        V3 = pulp.LpVariable('V3', lowBound=0, cat='Integer')
+
+        A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
+        B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
+        C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
+        A2 = pulp.LpVariable('A2', lowBound=0, cat='Continuous')
+        B2 = pulp.LpVariable('B2', lowBound=0, cat='Continuous')
+        A3 = pulp.LpVariable('A3', lowBound=0, cat='Continuous')
+
         if scenario == "Scenario 1: V1, V2, V3":
-            lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
-            V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
-            V2 = pulp.LpVariable('V2', lowBound=0, cat='Integer')
-            V3 = pulp.LpVariable('V3', lowBound=0, cat='Integer')
-
-            A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
-            B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
-            C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
-            A2 = pulp.LpVariable('A2', lowBound=0, cat='Continuous')
-            B2 = pulp.LpVariable('B2', lowBound=0, cat='Continuous')
-            A3 = pulp.LpVariable('A3', lowBound=0, cat='Continuous')
-
             lp_problem += cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3, "Total Cost"
             lp_problem += A1 + A2 + A3 == D_a_count, "Total_Deliveries_A_Constraint"
             lp_problem += B1 + B2 == D_b_count, "Total_Deliveries_B_Constraint"
@@ -83,29 +87,7 @@ if uploaded_file is not None:
             lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
             lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
             lp_problem += A3 == D_a_count - A1 - A2, "Assign_Remaining_A_To_V3"
-            lp_problem.solve()
-
-            return {
-                "Status": pulp.LpStatus[lp_problem.status],
-                "V1": pulp.value(V1),
-                "V2": pulp.value(V2),
-                "V3": pulp.value(V3),
-                "Total Cost": pulp.value(lp_problem.objective),
-                "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
-                "Deliveries assigned to V2": pulp.value(B2 + A2),
-                "Deliveries assigned to V3": pulp.value(A3)
-            }
         elif scenario == "Scenario 2: V1, V2":
-            lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
-            V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
-            V2 = pulp.LpVariable('V2', lowBound=0, cat='Integer')
-
-            A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
-            B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
-            C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
-            A2 = pulp.LpVariable('A2', lowBound=0, cat='Continuous')
-            B2 = pulp.LpVariable('B2', lowBound=0, cat='Continuous')
-
             lp_problem += cost_v1 * V1 + cost_v2 * V2, "Total Cost"
             lp_problem += A1 + A2 == D_a_count, "Total_Deliveries_A_Constraint"
             lp_problem += B1 + B2 == D_b_count, "Total_Deliveries_B_Constraint"
@@ -116,27 +98,8 @@ if uploaded_file is not None:
             lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
             lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
             lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-            lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
-            lp_problem.solve()
-
-            return {
-                "Status": pulp.LpStatus[lp_problem.status],
-                "V1": pulp.value(V1),
-                "V2": pulp.value(V2),
-                "Total Cost": pulp.value(lp_problem.objective),
-                "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
-                "Deliveries assigned to V2": pulp.value(B2 + A2),
-            }
+            lp_problem += A2 == D_a_count - A1, "Assign_Remaining_A_To_V2"
         elif scenario == "Scenario 3: V1, V3":
-            lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
-            V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
-            V3 = pulp.LpVariable('V3', lowBound=0, cat='Integer')
-
-            A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
-            B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
-            C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
-            A3 = pulp.LpVariable('A3', lowBound=0, cat='Continuous')
-
             lp_problem += cost_v1 * V1 + cost_v3 * V3, "Total Cost"
             lp_problem += A1 + A3 == D_a_count, "Total_Deliveries_A_Constraint"
             lp_problem += B1 == D_b_count, "Total_Deliveries_B_Constraint"
@@ -147,19 +110,22 @@ if uploaded_file is not None:
             lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
             lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
             lp_problem += A3 == D_a_count - A1, "Assign_Remaining_A_To_V3"
-            lp_problem.solve()
+        lp_problem.solve()
 
-            return {
-                "Status": pulp.LpStatus[lp_problem.status],
-                "V1": pulp.value(V1),
-                "V3": pulp.value(V3),
-                "Total Cost": pulp.value(lp_problem.objective),
-                "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
-                "Deliveries assigned to V3": pulp.value(A3),
-            }
+        return {
+            "Status": pulp.LpStatus[lp_problem.status],
+            "V1": pulp.value(V1),
+            "V2": pulp.value(V2) if scenario != "Scenario 3: V1, V3" else None,
+            "V3": pulp.value(V3) if scenario != "Scenario 2: V1, V2" else None,
+            "Total Cost": pulp.value(lp_problem.objective),
+            "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
+            "Deliveries assigned to V2": pulp.value(B2 + A2) if scenario != "Scenario 3: V1, V3" else None,
+            "Deliveries assigned to V3": pulp.value(A3) if scenario != "Scenario 2: V1, V2" else None
+        }
 
-    # Define the load optimization button and its functionality
+    # Define button for load optimization
     if st.button("Optimize Load"):
+        # Example Load Optimization with extracted data
         cost_v1 = 62.8156
         cost_v2 = 33.0
         cost_v3 = 29.0536
@@ -171,121 +137,102 @@ if uploaded_file is not None:
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, selected_scenario)
         st.write("Load Optimization Results:")
         st.write(f"Status: {result['Status']}")
-        st.write(f"V1: {result.get('V1', 'N/A')}")
-        st.write(f"V2: {result.get('V2', 'N/A')}")
-        st.write(f"V3: {result.get('V3', 'N/A')}")
+        st.write(f"V1: {result['V1']}")
+        st.write(f"V2: {result['V2']}")
+        st.write(f"V3: {result['V3']}")
         st.write(f"Total Cost: {result['Total Cost']}")
-        st.write(f"Deliveries assigned to V1: {result.get('Deliveries assigned to V1', 'N/A')}")
-        st.write(f"Deliveries assigned to V2: {result.get('Deliveries assigned to V2', 'N/A')}")
-        st.write(f"Deliveries assigned to V3: {result.get('Deliveries assigned to V3', 'N/A')}")
+        st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
+        st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
+        st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
 
-    # Ensure vehicle assignments are based on the selected scenario
-    def assign_deliveries_to_vehicles(result):
-        if selected_scenario == "Scenario 1: V1, V2, V3":
-            return {
-                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-            }
-        elif selected_scenario == "Scenario 2: V1, V2":
-            return {
-                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):].tolist()
-            }
-        elif selected_scenario == "Scenario 3: V1, V3":
-            return {
-                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):].tolist()
-            }
+        # Assign deliveries to vehicles
+        vehicle_assignments = {
+            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist() if selected_scenario != "Scenario 3: V1, V3" else [],
+            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist() if selected_scenario != "Scenario 2: V1, V2" else []
+        }
 
-    # Assign deliveries to vehicles based on the optimization result
-    if 'result' in locals():
-        vehicle_assignments = assign_deliveries_to_vehicles(result)
+        st.write("Vehicle Assignments:", vehicle_assignments)
 
-        st.write(f"Vehicle Assignments: {vehicle_assignments}")
+    # Define function to calculate distance matrix
+    def calculate_distance_matrix(df):
+        coords = df[['Latitude', 'Longitude']].values
+        distance_matrix = np.zeros((len(coords), len(coords)))
+        for i, coord1 in enumerate(coords):
+            for j, coord2 in enumerate(coords):
+                distance_matrix[i][j] = great_circle(coord1, coord2).kilometers
+        return distance_matrix
 
-        # Button to generate routes
-        if st.button("Generate Routes"):
-            st.write("Generating Routes...")  # Debug statement
+    # Define function to generate routes
+    def generate_routes(vehicle_assignments, df_locations):
+        vehicle_routes = {}
+        summary_data = []
 
-            # Function to calculate the distance matrix
-            def calculate_distance_matrix(df):
-                coords = df[['Latitude', 'Longitude']].values
-                return np.array([[great_circle(c1, c2).kilometers for c2 in coords] for c1 in coords])
+        for vehicle, indices in vehicle_assignments.items():
+            if not indices:
+                continue
+            df_vehicle = df_locations.loc[indices]
+            distance_matrix = calculate_distance_matrix(df_vehicle)
 
-            # Function to generate routes for each vehicle
-            def generate_routes(vehicle_assignments, df_locations):
-                vehicle_routes = {}
-                summary_data = []
+            # Perform DBSCAN clustering
+            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+            db.fit(distance_matrix)
+            labels = db.labels_
+            df_vehicle['Cluster'] = labels
 
-                for vehicle, indices in vehicle_assignments.items():
-                    st.write(f"Processing {vehicle}...")  # Debug statement
-                    df_vehicle = df_locations.loc[indices].reset_index(drop=True)
-                    distance_matrix = calculate_distance_matrix(df_vehicle)
+            # Store the routes and summary data
+            for cluster in np.unique(labels):
+                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                vehicle_routes[f'{vehicle}_Cluster_{cluster}'] = cluster_df
+                summary_data.append({
+                    'Cluster': f'{vehicle}_Cluster_{cluster}',
+                    'Vehicle': vehicle,
+                    'Num_Shops': len(cluster_df),
+                    'Total_Distance': cluster_df['Distance'].sum(),
+                    'Centroid_Lat': cluster_df['Latitude'].mean(),
+                    'Centroid_Lon': cluster_df['Longitude'].mean()
+                })
 
-                    db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
-                    db.fit(distance_matrix)
-                    labels = db.labels_
-                    df_vehicle['Cluster'] = labels
+        summary_df = pd.DataFrame(summary_data)
+        return vehicle_routes, summary_df
 
-                    vehicle_routes[vehicle] = {}
-                    for cluster in np.unique(labels):
-                        cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
-                        vehicle_routes[vehicle][f'Cluster {cluster}'] = cluster_df
+    # Generate maps and provide download link
+    def generate_excel(vehicle_routes, summary_df):
+        file_path = '/mnt/data/optimized_routes.xlsx'
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+            for route_name, route_df in vehicle_routes.items():
+                route_df.to_excel(writer, sheet_name=route_name, index=False)
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+        return file_path
 
-                        # Save the summary data
-                        centroid = cluster_df[['Latitude', 'Longitude']].mean().to_list()
-                        summary_data.append({
-                            'Vehicle': vehicle,
-                            'Cluster': cluster,
-                            'Centroid Latitude': centroid[0],
-                            'Centroid Longitude': centroid[1],
-                            'Number of Shops': len(cluster_df),
-                            'Total Distance': cluster_df['Weight (KG)'].sum()  # Assuming 'Total Distance' means sum of weights in this context
-                        })
+    # Generate cluster maps
+    def render_cluster_maps(df_locations):
+        st.write("Generating routes and cluster maps...")
+        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
 
-                        # Render map for each cluster
-                        render_map(cluster_df, vehicle, cluster)
+        for route_name, route_df in vehicle_routes.items():
+            render_map(route_df, route_name)
+            st.write(f"Map saved for {route_name}")
 
-                summary_df = pd.DataFrame(summary_data)
-                return vehicle_routes, summary_df
+        # Display summary
+        st.write("Cluster Summary")
+        st.dataframe(summary_df)
 
-            # Function to render a map
-            def render_map(df, vehicle, cluster):
-                map_html = f"{vehicle}_Cluster_{cluster}.html"
-                map_url = f"https://www.google.com/maps/dir/?api=1&destination={df.iloc[0]['Latitude']},{df.iloc[0]['Longitude']}&waypoints="
+        # Generate Excel file and provide download link
+        excel_file_path = generate_excel(vehicle_routes, summary_df)
+        st.write(f"[Download the optimized routes and summary]({excel_file_path})")
 
-                for i in range(1, len(df)):
-                    map_url += f"{df.iloc[i]['Latitude']},{df.iloc[i]['Longitude']}|"
+    # Define function to render a map for a cluster
+    def render_map(df, title):
+        gmap = gmplot.GoogleMapPlotter(df['Latitude'].mean(), df['Longitude'].mean(), 13, apikey=google_maps_api_key)
+        gmap.scatter(df['Latitude'], df['Longitude'], '#FF0000', size=40, marker=False)
+        for i, row in df.iterrows():
+            gmap.text(row['Latitude'], row['Longitude'], row['Party'])
+        file_path = f'/mnt/data/{title}.html'
+        gmap.draw(file_path)
+        st.write(f"[View {title} Map](file_path)")
 
-                map_url = map_url.strip("|")
-                df['Google Maps URL'] = map_url
-
-                st.write(f"Map saved for {vehicle} Cluster {cluster}")
-                st.map(df[['Latitude', 'Longitude']])
-                st.write(f"Google Maps URL: [Open in Google Maps]({map_url})")
-
-            # Generate routes and summary
-            vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
-
-            # Display the summary DataFrame
-            st.write("Summary of Clusters:")
-            st.dataframe(summary_df)
-
-            # Function to generate Excel file with routes and summary
-            def generate_excel(vehicle_routes, summary_df):
-                file_path = "/mnt/data/optimized_routes.xlsx"
-                with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                    for vehicle, clusters in vehicle_routes.items():
-                        for cluster, df_cluster in clusters.items():
-                            df_cluster.to_excel(writer, sheet_name=f"{vehicle}_{cluster}", index=False)
-
-                    summary_df.to_excel(writer, sheet_name='Summary', index=False)
-
-                return file_path
-
-            # Generate Excel file with routes and summary
-            excel_file_path = generate_excel(vehicle_routes, summary_df)
-
-            # Provide download link for the Excel file
-            st.write(f"[Download the optimized routes and summary]({excel_file_path})")
+    # Define button for route generation
+    if st.button("Generate Routes"):
+        render_cluster_maps(df_locations)
