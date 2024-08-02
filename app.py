@@ -181,7 +181,7 @@ if uploaded_file is not None:
                 distance_matrix = calculate_distance_matrix(df_vehicle)
 
                 # Perform DBSCAN clustering
-                db = DBSCAN(eps=0.5 min_samples=1, metric='precomputed')
+                db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
                 db.fit(distance_matrix)
                 labels = db.labels_
                 df_vehicle['Cluster'] = labels
