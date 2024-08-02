@@ -155,6 +155,13 @@ if uploaded_file is not None:
 
         st.write("Vehicle Assignments:", vehicle_assignments)
 
+        # Save vehicle assignments to session state
+        st.session_state['vehicle_assignments'] = vehicle_assignments
+
+    # Define button for route generation
+    if st.button("Generate Routes") and 'vehicle_assignments' in st.session_state:
+        vehicle_assignments = st.session_state['vehicle_assignments']
+
         # Define function to calculate distance matrix
         def calculate_distance_matrix(df):
             coords = df[['Latitude', 'Longitude']].values
@@ -232,8 +239,7 @@ if uploaded_file is not None:
                 gmap.text(row['Latitude'], row['Longitude'], row['Party'])
             file_path = f'/mnt/data/{title}.html'
             gmap.draw(file_path)
-            st.write(f"[View {title} Map](file_path)")
+            st.write(f"[View {title} Map]({file_path})")
 
-        # Define button for route generation
-        if st.button("Generate Routes"):
-            render_cluster_maps(df_locations)
+        # Generate cluster maps
+        render_cluster_maps(df_locations)
