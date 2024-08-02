@@ -4,13 +4,11 @@ from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 import pulp
 import streamlit as st
-import requests
-from io import BytesIO
 import os
 import gmplot
+from dotenv import load_dotenv
 
 # Load environment variables
-from dotenv import load_dotenv
 load_dotenv()
 
 # Define the Google Maps API key
@@ -207,8 +205,7 @@ if uploaded_file is not None:
 
         # Generate maps and provide download link
         def generate_excel(vehicle_routes, summary_df):
-            file_path = '/mnt/data/optimized_routes.xlsx'
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            file_path = 'optimized_routes.xlsx'
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
                 for route_name, route_df in vehicle_routes.items():
                     route_df.to_excel(writer, sheet_name=route_name, index=False)
@@ -238,8 +235,7 @@ if uploaded_file is not None:
             gmap.scatter(df['Latitude'], df['Longitude'], '#FF0000', size=40, marker=False)
             for i, row in df.iterrows():
                 gmap.text(row['Latitude'], row['Longitude'], row['Party'])
-            file_path = f'/mnt/data/{title}.html'
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            file_path = f'{title}.html'
             gmap.draw(file_path)
             st.write(f"[View {title} Map]({file_path})")
 
