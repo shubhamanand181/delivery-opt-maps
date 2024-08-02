@@ -202,8 +202,12 @@ if uploaded_file is not None:
     if 'result' in locals():
         vehicle_assignments = assign_deliveries_to_vehicles(result)
 
+        st.write(f"Vehicle Assignments: {vehicle_assignments}")
+
         # Button to generate routes
         if st.button("Generate Routes"):
+            st.write("Generating Routes...")  # Debug statement
+
             # Function to calculate the distance matrix
             def calculate_distance_matrix(df):
                 coords = df[['Latitude', 'Longitude']].values
@@ -215,6 +219,7 @@ if uploaded_file is not None:
                 summary_data = []
 
                 for vehicle, indices in vehicle_assignments.items():
+                    st.write(f"Processing {vehicle}...")  # Debug statement
                     df_vehicle = df_locations.loc[indices].reset_index(drop=True)
                     distance_matrix = calculate_distance_matrix(df_vehicle)
 
@@ -283,4 +288,4 @@ if uploaded_file is not None:
             excel_file_path = generate_excel(vehicle_routes, summary_df)
 
             # Provide download link for the Excel file
-            st.write(f"[Download Optimized Routes Excel]({excel_file_path})")
+            st.write(f"[Download the optimized routes and summary]({excel_file_path})")
