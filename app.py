@@ -7,6 +7,7 @@ import streamlit as st
 import requests
 from io import BytesIO
 import os
+import gmplot
 
 # Load environment variables
 from dotenv import load_dotenv
