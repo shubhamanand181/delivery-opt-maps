@@ -95,7 +95,10 @@ if uploaded_file:
     v1_capacity = st.number_input("Capacity for Vehicle 1", value=64)
     v2_capacity = st.number_input("Capacity for Vehicle 2", value=66)
     v3_capacity = st.number_input("Capacity for Vehicle 3", value=72)
-    scenario = st.selectbox("Select Scenario", ["Scenario 1: V1, V2, V3"])
+     scenario = st.selectbox(
+        "Select Load Optimization Scenario",
+        ["Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3"]
+    )
 
     # Optimize load
     result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
