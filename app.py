@@ -1,33 +1,27 @@
-import os
 import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
-import pulp
-import folium
-from streamlit_folium import st_folium
 import streamlit as st
-from dotenv import load_dotenv
+import os
+import pulp
+import requests
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables
+google_maps_api_key = st.secrets["GOOGLE_MAPS_API_KEY"]
 
-# Get Google Maps API key from environment variables
-google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+# Title for the Streamlit App
+st.title("Delivery Optimization and Route Generation")
 
-# Streamlit app setup
-st.title("Delivery Optimization App with Google Maps Integration")
+# File uploader for user to upload the delivery data
+uploaded_file = st.file_uploader("Upload your delivery data Excel file", type=["xlsx"])
 
-# Upload the file
-uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
+# Main function to handle the operations
+if uploaded_file:
+    df_locations = pd.read_excel(uploaded_file, engine='openpyxl')
 
-if uploaded_file is not None:
-    # Load data from the uploaded file
-    df_locations = pd.read_excel(uploaded_file)
-    
-    # Display the first few rows of the DataFrame
-    st.write("Uploaded Data:")
-    st.write(df_locations.head())
+    # Display the column names to verify
+    st.write("Column Names:", df_locations.columns)
 
     # Ensure column names are as expected
     expected_columns = ['Party', 'Latitude', 'Longitude', 'Weight (KG)']
@@ -35,10 +29,10 @@ if uploaded_file is not None:
         st.write("All expected columns are present.")
     else:
         st.write("One or more expected columns are missing. Please check the column names in the Excel file.")
-    
+
     # Remove rows with NaN values in Latitude or Longitude
     df_locations.dropna(subset=['Latitude', 'Longitude'], inplace=True)
-    
+
     # Categorize weights
     def categorize_weights(df):
         D_a = df[(df['Weight (KG)'] > 0) & (df['Weight (KG)'] <= 2)]
@@ -53,7 +47,7 @@ if uploaded_file is not None:
     st.write(f"Type B Deliveries (2-10 kg): {len(D_b)}")
     st.write(f"Type C Deliveries (10-200 kg): {len(D_c)}")
 
-    # Load optimization function
+    # Define the load optimization function
     def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
         if scenario == "Scenario 1: V1, V2, V3":
             lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
@@ -93,178 +87,116 @@ if uploaded_file is not None:
                 "Deliveries assigned to V2": pulp.value(B2 + A2),
                 "Deliveries assigned to V3": pulp.value(A3)
             }
-        # Add similar cases for other scenarios if needed
-        return None
 
-    # Scenario selection and cost input
+    # Input fields for optimization parameters
+    cost_v1 = st.number_input("Cost for Vehicle 1", value=62.8156)
+    cost_v2 = st.number_input("Cost for Vehicle 2", value=33.0)
+    cost_v3 = st.number_input("Cost for Vehicle 3", value=29.0536)
+    v1_capacity = st.number_input("Capacity for Vehicle 1", value=64)
+    v2_capacity = st.number_input("Capacity for Vehicle 2", value=66)
+    v3_capacity = st.number_input("Capacity for Vehicle 3", value=72)
     scenario = st.selectbox("Select Scenario", ["Scenario 1: V1, V2, V3"])
-    cost_v1 = st.number_input("Cost for V1", value=62.8156)
-    cost_v2 = st.number_input("Cost for V2", value=33.0)
-    cost_v3 = st.number_input("Cost for V3", value=29.0536)
-    v1_capacity = st.number_input("Capacity for V1", value=64)
-    v2_capacity = st.number_input("Capacity for V2", value=66)
-    v3_capacity = st.number_input("Capacity for V3", value=72)
 
-    if st.button("Optimize Load"):
-        result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
-        st.write("Load Optimization Results:")
-        st.write(f"Status: {result['Status']}")
-        st.write(f"V1: {result['V1']}")
-        st.write(f"V2: {result['V2']}")
-        st.write(f"V3: {result['V3']}")
-        st.write(f"Total Cost: {result['Total Cost']}")
-        st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
-        st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
-        st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
+    # Optimize load
+    result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
+    st.write("Load Optimization Results:")
+    st.write(f"Status: {result['Status']}")
+    st.write(f"V1: {result['V1']}")
+    st.write(f"V2: {result['V2']}")
+    st.write(f"V3: {result['V3']}")
+    st.write(f"Total Cost: {result['Total Cost']}")
+    st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
+    st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
+    st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
 
-        # Assign deliveries to vehicles
-        vehicle_assignments = {
-            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-        }
+    # Assign deliveries to vehicles
+    vehicle_assignments = {
+        "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+        "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+        "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
+    }
 
-        st.write("Vehicle Assignments:")
-        st.write(vehicle_assignments)
+    st.write("Vehicle Assignments:", vehicle_assignments)
 
-        # Save vehicle assignments in the session state for route optimization
-        st.session_state['vehicle_assignments'] = vehicle_assignments
-        st.session_state['df_locations'] = df_locations
+    # Function to calculate distance matrix
+    def calculate_distance_matrix(df):
+        num_locations = len(df)
+        distance_matrix = np.zeros((num_locations, num_locations))
 
-# Route Optimization
-if 'vehicle_assignments' in st.session_state and 'df_locations' in st.session_state:
-    vehicle_assignments = st.session_state['vehicle_assignments']
-    df_locations = st.session_state['df_locations']
+        for i in range(num_locations):
+            for j in range(num_locations):
+                try:
+                    coords_1 = (df.loc[i, 'Latitude'], df.loc[i, 'Longitude'])
+                    coords_2 = (df.loc[j, 'Latitude'], df.loc[j, 'Longitude'])
+                    distance_matrix[i][j] = great_circle(coords_1, coords_2).meters
+                except Exception as e:
+                    print(f"Error calculating distance between locations {i} and {j}: {e}")
+                    distance_matrix[i][j] = float('inf')  # Assign a large value in case of error
+        return distance_matrix
 
-    if st.button("Generate Routes"):
-        # Route optimization function
-        def calculate_distance_matrix(df):
-            num_locations = len(df)
-            distance_matrix = np.zeros((num_locations, num_locations))
+    # Function to generate Google Maps link for a given route
+    def generate_google_maps_link(locations):
+        base_url = "https://www.google.com/maps/dir/?api=1"
+        origin = f"{locations[0]['Latitude']},{locations[0]['Longitude']}"
+        destination = f"{locations[-1]['Latitude']},{locations[-1]['Longitude']}"
+        waypoints = "|".join([f"{loc['Latitude']},{loc['Longitude']}" for loc in locations[1:-1]])
 
-            for i in range(num_locations):
-                for j in range(num_locations):
-                    if i != j:
-                        coords_1 = (df.iloc[i]['Latitude'], df.iloc[i]['Longitude'])
-                        coords_2 = (df.iloc[j]['Latitude'], df.iloc[j]['Longitude'])
-                        distance_matrix[i][j] = great_circle(coords_1, coords_2).meters
-            return distance_matrix
+        link = f"{base_url}&origin={origin}&destination={destination}&waypoints={waypoints}&travelmode=driving"
+        return link
 
-        def nearest_neighbor(distance_matrix):
-            num_locations = len(distance_matrix)
-            visited = [False] * num_locations
-            route = [0]
-            visited[0] = True
-            total_distance = 0
+    # Function to generate routes for each vehicle
+    def generate_routes(vehicle_assignments, df):
+        vehicle_routes = {}
+        cluster_summary = []
 
-            for _ in range(num_locations - 1):
-                last_index = route[-1]
-                next_index = None
-                min_distance = float('inf')
+        for vehicle, indices in vehicle_assignments.items():
+            df_vehicle = df.loc[indices].reset_index(drop=True)
+            distance_matrix = calculate_distance_matrix(df_vehicle)
 
-                for j in range(num_locations):
-                    if not visited[j] and distance_matrix[last_index][j] < min_distance:
-                        next_index = j
-                        min_distance = distance_matrix[last_index][j]
+            db = DBSCAN(eps=500, min_samples=1, metric='precomputed')
+            db.fit(distance_matrix)
 
-                route.append(next_index)
-                visited[next_index] = True
-                total_distance += min_distance
+            df_vehicle['Cluster'] = db.labels_
 
-            # Return to start point
-            total_distance += distance_matrix[route[-1]][route[0]]
-            route.append(0)
+            vehicle_routes[vehicle] = []
+            for cluster_label in df_vehicle['Cluster'].unique():
+                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster_label].reset_index(drop=True)
+                cluster_coords = cluster_df[['Latitude', 'Longitude']].to_dict('records')
 
-            return route, total_distance
+                # Generate Google Maps link
+                google_maps_link = generate_google_maps_link(cluster_coords)
+                vehicle_routes[vehicle].append({
+                    'Cluster': cluster_label,
+                    'Link': google_maps_link,
+                    'Details': cluster_df
+                })
 
-        def generate_routes(vehicle_assignments, df_locations):
-            vehicle_routes = {}
-            summary_data = []
+                # Summary for clusters
+                cluster_summary.append({
+                    'Vehicle': vehicle,
+                    'Cluster': cluster_label,
+                    'Num_Shops': len(cluster_df),
+                    'Total_Distance': sum(distance_matrix.flatten())  # Approximate total distance
+                })
 
-            for vehicle, indices in vehicle_assignments.items():
-                df_vehicle = df_locations.loc[indices]
-                distance_matrix = calculate_distance_matrix(df_vehicle)
-                db = DBSCAN(eps=500, min_samples=1, metric='precomputed')
-                db.fit(distance_matrix)
+        return vehicle_routes, pd.DataFrame(cluster_summary)
 
-                df_vehicle['Cluster'] = db.labels_
-                vehicle_routes[vehicle] = []
+    # Generate routes for vehicles
+    vehicle_routes, cluster_summary = generate_routes(vehicle_assignments, df_locations)
 
-                for cluster_id in df_vehicle['Cluster'].unique():
-                    cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster_id]
-                    distance_matrix_cluster = calculate_distance_matrix(cluster_df)
-                    route, total_distance = nearest_neighbor(distance_matrix_cluster)
-                    vehicle_routes[vehicle].append((cluster_id, route, total_distance))
+    # Display Google Maps links for each vehicle and cluster
+    for vehicle, routes in vehicle_routes.items():
+        for route in routes:
+            st.write(f"Vehicle {vehicle}, Cluster {route['Cluster']}: {route['Link']}")
 
-                    summary_data.append({
-                        'Vehicle': vehicle,
-                        'Cluster': cluster_id,
-                        'Num Shops': len(cluster_df),
-                        'Total Distance': total_distance / 1000,  # in kilometers
-                        'Latitude': cluster_df['Latitude'].mean(),
-                        'Longitude': cluster_df['Longitude'].mean()
-                    })
+    # Display cluster summary
+    st.write("Cluster Summary:")
+    st.write(cluster_summary)
 
-            summary_df = pd.DataFrame(summary_data)
-            return vehicle_routes, summary_df
-
-        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
-
-        # Display the summary table
-        st.write("Summary Table")
-        st.write(summary_df)
-
-        # Generate Excel with routes and summary
-        def generate_excel(vehicle_routes, summary_df):
-            file_path = '/mnt/data/optimized_routes.xlsx'
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                for vehicle, routes in vehicle_routes.items():
-                    for cluster_id, route, total_distance in routes:
-                        cluster_df = df_locations.loc[route[:-1]]
-                        cluster_df['Sequence'] = range(1, len(cluster_df) + 1)
-                        cluster_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{cluster_id}', index=False)
-
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
-
-            return file_path
-
-        file_path = generate_excel(vehicle_routes, summary_df)
-
-        # Download link for Excel file
-        st.write(f"[Download Optimized Routes]({file_path})")
-
-        # Render maps for each cluster
-        def render_map(df, name="Map"):
-            center_lat = df['Latitude'].mean()
-            center_lon = df['Longitude'].mean()
-            m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
-
-            for _, row in df.iterrows():
-                folium.Marker(
-                    location=[row['Latitude'], row['Longitude']],
-                    popup=row['Party'],
-                ).add_to(m)
-
-            st_folium(m, width=700, height=500)
-
-        st.write("Cluster Maps")
-        for vehicle, routes in vehicle_routes.items():
-            st.write(f"Vehicle: {vehicle}")
-            for cluster_id, route, total_distance in routes:
-                cluster_df = df_locations.loc[route[:-1]]
-                st.write(f"Cluster {cluster_id} Route")
-                render_map(cluster_df)
-
-        # Option to choose starting point for vehicle-specific maps
-        st.write("Vehicle Specific Maps with Custom Starting Points")
-        vehicle_choice = st.selectbox("Select Vehicle", list(vehicle_routes.keys()))
-        if vehicle_choice:
-            route_choice = st.selectbox("Select Route", list(range(len(vehicle_routes[vehicle_choice]))))
-            starting_point = st.selectbox("Select Starting Point", vehicle_routes[vehicle_choice][route_choice][1][:-1])
-            if st.button("Generate Vehicle Map with Custom Start"):
-                route, total_distance = nearest_neighbor(calculate_distance_matrix(df_locations.loc[vehicle_routes[vehicle_choice][route_choice][1][:-1]]))
-                custom_start_df = df_locations.loc[route]
-                render_map(custom_start_df)
-
+    # Generate vehicle-specific maps
+    for vehicle, routes in vehicle_routes.items():
+        all_coords = []
+        for route in routes:
+            all_coords.extend(route['Details'][['Latitude', 'Longitude']].to_dict('records'))
+        vehicle_map_link = generate_google_maps_link(all_coords)
+        st.write(f"Vehicle {vehicle} Overall Route: {vehicle_map_link}")
