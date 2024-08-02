@@ -191,12 +191,13 @@ if uploaded_file is not None:
                 # Store the routes and summary data
                 for cluster in np.unique(labels):
                     cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                    cluster_distance = calculate_distance_matrix(cluster_df).sum()
                     vehicle_routes[f'{vehicle}_Cluster_{cluster}'] = cluster_df
                     summary_data.append({
                         'Cluster': f'{vehicle}_Cluster_{cluster}',
                         'Vehicle': vehicle,
                         'Num_Shops': len(cluster_df),
-                        'Total_Distance': cluster_df['Distance'].sum(),
+                        'Total_Distance': cluster_distance,
                         'Centroid_Lat': cluster_df['Latitude'].mean(),
                         'Centroid_Lon': cluster_df['Longitude'].mean()
                     })
