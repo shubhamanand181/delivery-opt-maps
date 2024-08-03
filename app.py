@@ -102,7 +102,7 @@ if uploaded_file:
             lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
             lp_problem += A3 == D_a_count - A1, "Assign_Remaining_A_To_V3"
 
-        lp_problem.solve()  # Use the default solver by not specifying any
+        lp_problem.solve(pulp.GLPK_CMD())  # Use the default solver by not specifying any
 
         return {
             "Status": pulp.LpStatus[lp_problem.status],
