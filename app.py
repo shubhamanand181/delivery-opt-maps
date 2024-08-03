@@ -159,7 +159,7 @@ if uploaded_file:
             df_vehicle = df_locations.loc[assignments]
 
             distance_matrix = calculate_distance_matrix(df_vehicle)
-            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+            db = DBSCAN(eps=0.1, min_samples=1, metric='precomputed')
             db.fit(distance_matrix)
 
             labels = db.labels_
