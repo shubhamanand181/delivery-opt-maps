@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 import pulp
-import gmaps
+import gmplot
 import os
 from dotenv import load_dotenv
 
@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-gmaps.configure(api_key=google_maps_api_key)
+gmplot.GoogleMapPlotter.google_api_key = google_maps_api_key
 
 st.title("Delivery Optimization and Route Mapping")
 
@@ -132,68 +132,122 @@ if uploaded_file:
             "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
         }
 
-        st.session_state.vehicle_assignments = vehicle_assignments
+        st.session_state['vehicle_assignments'] = vehicle_assignments
+
+    def calculate_distance_matrix(df):
+        num_locations = df.shape[0]
+        distance_matrix = np.zeros((num_locations, num_locations))
+        for i in range(num_locations):
+            for j in range(i + 1, num_locations):
+                distance = great_circle((df.iloc[i]['Latitude'], df.iloc[i]['Longitude']),
+                                        (df.iloc[j]['Latitude'], df.iloc[j]['Longitude'])).kilometers
+                distance_matrix[i, j] = distance
+                distance_matrix[j, i] = distance
+        return distance_matrix
 
     def generate_routes(vehicle_assignments, df):
-        distance_matrix = calculate_distance_matrix(df)
-
-        db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
-        db.fit(distance_matrix)
-
-        df['Cluster'] = db.labels_
-
-        vehicle_routes = {}
+        routes = {}
         summary_data = []
 
         for vehicle, assignments in vehicle_assignments.items():
-            vehicle_routes[vehicle] = []
-            for cluster_label in df['Cluster'].unique():
-                cluster_df = df[(df.index.isin(assignments)) & (df['Cluster'] == cluster_label)]
-                if not cluster_df.empty:
-                    vehicle_routes[vehicle].append(cluster_df)
-                    centroid = cluster_df[['Latitude', 'Longitude']].mean().values
-                    summary_data.append({
-                        'Vehicle': vehicle,
-                        'Cluster': cluster_label,
-                        'Centroid_Latitude': centroid[0],
-                        'Centroid_Longitude': centroid[1],
-                        'Number_of_Shops': len(cluster_df),
-                        'Total_Distance': cluster_df['Distance'].sum(),
-                    })
+            df_vehicle = df.loc[assignments].reset_index(drop=True)
+            distance_matrix = calculate_distance_matrix(df_vehicle)
+
+            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+            db.fit(distance_matrix)
+
+            df_vehicle['Cluster'] = db.labels_
+
+            for cluster in df_vehicle['Cluster'].unique():
+                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                cluster_df['Distance'] = 0.0  # Placeholder for distance calculation
+                cluster_df.reset_index(drop=True, inplace=True)
+
+                centroid = (cluster_df['Latitude'].mean(), cluster_df['Longitude'].mean())
+                total_distance = 0
+                for i in range(len(cluster_df) - 1):
+                    total_distance += great_circle(
+                        (cluster_df.iloc[i]['Latitude'], cluster_df.iloc[i]['Longitude']),
+                        (cluster_df.iloc[i + 1]['Latitude'], cluster_df.iloc[i + 1]['Longitude'])
+                    ).kilometers
+                    cluster_df.at[i + 1, 'Distance'] = total_distance
+
+                summary_data.append({
+                    'Vehicle': vehicle,
+                    'Cluster': cluster,
+                    'Centroid Latitude': centroid[0],
+                    'Centroid Longitude': centroid[1],
+                    'Number of Shops': len(cluster_df),
+                    'Total Distance': total_distance
+                })
+
+                route_name = f"{vehicle}_Cluster_{cluster}"
+                routes[route_name] = cluster_df
 
         summary_df = pd.DataFrame(summary_data)
-        return vehicle_routes, summary_df
+        return routes, summary_df
 
     def render_map(df, route_name):
-        gmap = gmplot.GoogleMapPlotter(df['Latitude'].mean(), df['Longitude'].mean(), 14, apikey=google_maps_api_key)
-        gmap.scatter(df['Latitude'], df['Longitude'], '#FF0000', size=40, marker=True)
-        path = zip(df['Latitude'], df['Longitude'])
-        gmap.plot([coord[0] for coord in path], [coord[1] for coord in path], 'cornflowerblue', edge_width=2.5)
-        st.write(f"[View Map for {route_name}](https://www.google.com/maps/dir/{'/'.join(f'{lat},{lon}' for lat, lon in path)})")
+        if df.empty:
+            return
+
+        gmap = gmplot.GoogleMapPlotter(df['Latitude'].mean(), df['Longitude'].mean(), 13)
+        gmap.scatter(df['Latitude'], df['Longitude'], '#FF0000', size=40, marker=False)
+        gmap.plot(df['Latitude'], df['Longitude'], 'cornflowerblue', edge_width=2.5)
+        
+        file_path = f"maps/{route_name}.html"
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        gmap.draw(file_path)
+        st.write(f"Map for {route_name} saved at {file_path}")
+
+    def render_cluster_maps(df):
+        if 'vehicle_assignments' not in st.session_state:
+            st.write("Please optimize the load first.")
+            return
+
+        vehicle_assignments = st.session_state['vehicle_assignments']
+        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df)
+        st.write("Vehicle Routes Summary", summary_df)
+
+        for route_name, route_df in vehicle_routes.items():
+            render_map(route_df, route_name)
 
     if st.button('Generate Routes'):
+        render_cluster_maps(df_locations)
+
+    # Function to generate Google Maps link
+    def generate_gmaps_link(df):
+        if df.empty:
+            return ""
+
+        base_url = "https://www.google.com/maps/dir/"
+        waypoints = "/".join([f"{lat},{lon}" for lat, lon in zip(df['Latitude'], df['Longitude'])])
+        return f"{base_url}{waypoints}"
+
+    # Generate links for routes
+    if 'vehicle_assignments' in st.session_state:
+        vehicle_assignments = st.session_state['vehicle_assignments']
+        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
+
+        for route_name, route_df in vehicle_routes.items():
+            gmaps_link = generate_gmaps_link(route_df)
+            st.write(f"Google Maps Link for {route_name}: [Link]({gmaps_link})")
+
+    # Function to generate and download Excel file
+    def generate_excel(vehicle_routes, summary_df):
+        file_path = '/mnt/data/optimized_routes.xlsx'
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+            for route_name, route_df in vehicle_routes.items():
+                route_df.to_excel(writer, sheet_name=route_name[:31], index=False)
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+
+        return file_path
+
+    if st.button('Download Excel'):
         if 'vehicle_assignments' in st.session_state:
-            vehicle_assignments = st.session_state.vehicle_assignments
+            vehicle_assignments = st.session_state['vehicle_assignments']
             vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
-
-            st.write("Cluster Summary")
-            st.write(summary_df)
-
-            for vehicle, clusters in vehicle_routes.items():
-                for i, cluster_df in enumerate(clusters):
-                    route_name = f"{vehicle} Cluster {i}"
-                    render_map(cluster_df, route_name)
-
-            def generate_excel(vehicle_routes, summary_df):
-                output_path = '/mnt/data/optimized_routes.xlsx'
-                with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
-                    summary_df.to_excel(writer, sheet_name='Summary', index=False)
-                    for vehicle, clusters in vehicle_routes.items():
-                        for i, cluster_df in enumerate(clusters):
-                            cluster_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{i}', index=False)
-                return output_path
-
             file_path = generate_excel(vehicle_routes, summary_df)
-            st.markdown(f"[Download Excel file](./{file_path})")
-        else:
-            st.write("Please optimize the load first.")
+            st.write(f"[Download Excel]({file_path})")
