@@ -1,6 +1,6 @@
 streamlit
 pandas
-numpy==1.26.3
+numpy==1.21.0  # Set to a compatible version
 scikit-learn
 geopy
 pyomo
@@ -8,3 +8,4 @@ gmplot
 python-dotenv
 openpyxl
 xlsxwriter
+glpk
