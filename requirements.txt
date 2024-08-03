@@ -5,7 +5,5 @@ scikit-learn
 geopy
 pulp
 gmplot
-openpyxl
 python-dotenv
-gmaps
-glpk
+coin-or-tools
