@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
-import pyomo.environ as pyo
-from pyomo.opt import SolverFactory
+from ortools.linear_solver import pywraplp
 import gmplot
 from dotenv import load_dotenv
 import streamlit as st
@@ -60,67 +59,80 @@ if uploaded_file:
     )
 
     def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
-        model = pyo.ConcreteModel()
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        if not solver:
+            return None
 
-        model.V1 = pyo.Var(within=pyo.NonNegativeIntegers)
-        model.V2 = pyo.Var(within=pyo.NonNegativeIntegers)
-        model.V3 = pyo.Var(within=pyo.NonNegativeIntegers)
+        # Variables
+        V1 = solver.IntVar(0, solver.infinity(), 'V1')
+        V2 = solver.IntVar(0, solver.infinity(), 'V2')
+        V3 = solver.IntVar(0, solver.infinity(), 'V3')
 
-        model.A1 = pyo.Var(within=pyo.NonNegativeReals)
-        model.B1 = pyo.Var(within=pyo.NonNegativeReals)
-        model.C1 = pyo.Var(within=pyo.NonNegativeReals)
-        model.A2 = pyo.Var(within=pyo.NonNegativeReals)
-        model.B2 = pyo.Var(within=pyo.NonNegativeReals)
-        model.A3 = pyo.Var(within=pyo.NonNegativeReals)
+        A1 = solver.NumVar(0, solver.infinity(), 'A1')
+        B1 = solver.NumVar(0, solver.infinity(), 'B1')
+        C1 = solver.NumVar(0, solver.infinity(), 'C1')
+        A2 = solver.NumVar(0, solver.infinity(), 'A2')
+        B2 = solver.NumVar(0, solver.infinity(), 'B2')
+        A3 = solver.NumVar(0, solver.infinity(), 'A3')
 
-        model.cost = pyo.Objective(
-            expr=cost_v1 * model.V1 + cost_v2 * model.V2 + cost_v3 * model.V3,
-            sense=pyo.minimize
-        )
-
-        model.total_deliveries_A = pyo.Constraint(expr=model.A1 + model.A2 + model.A3 == D_a_count)
-        model.total_deliveries_B = pyo.Constraint(expr=model.B1 + model.B2 == D_b_count)
-        model.total_deliveries_C = pyo.Constraint(expr=model.C1 == D_c_count)
+        # Constraints
+        solver.Add(A1 + A2 + A3 == D_a_count)
+        solver.Add(B1 + B2 == D_b_count)
+        solver.Add(C1 == D_c_count)
 
         if scenario == "Scenario 1: V1, V2, V3":
-            model.V1_capacity = pyo.Constraint(expr=v1_capacity * model.V1 >= model.C1 + model.B1 + model.A1)
-            model.V2_capacity = pyo.Constraint(expr=v2_capacity * model.V2 >= model.B2 + model.A2)
-            model.V3_capacity = pyo.Constraint(expr=v3_capacity * model.V3 >= model.A3)
-            model.assign_C_to_V1 = pyo.Constraint(expr=model.C1 == D_c_count)
-            model.assign_B_to_V1 = pyo.Constraint(expr=model.B1 <= v1_capacity * model.V1 - model.C1)
-            model.assign_remaining_B_to_V2 = pyo.Constraint(expr=model.B2 == D_b_count - model.B1)
-            model.assign_A_to_V1 = pyo.Constraint(expr=model.A1 <= v1_capacity * model.V1 - model.C1 - model.B1)
-            model.assign_A_to_V2 = pyo.Constraint(expr=model.A2 <= v2_capacity * model.V2 - model.B2)
-            model.assign_remaining_A_to_V3 = pyo.Constraint(expr=model.A3 == D_a_count - model.A1 - model.A2)
+            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+            solver.Add(v2_capacity * V2 >= B2 + A2)
+            solver.Add(v3_capacity * V3 >= A3)
+            solver.Add(C1 == D_c_count)
+            solver.Add(B1 <= v1_capacity * V1 - C1)
+            solver.Add(B2 == D_b_count - B1)
+            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+            solver.Add(A2 <= v2_capacity * V2 - B2)
+            solver.Add(A3 == D_a_count - A1 - A2)
+            # Additional constraints to prioritize cheaper vehicles
+            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
         elif scenario == "Scenario 2: V1, V2":
-            model.V1_capacity = pyo.Constraint(expr=v1_capacity * model.V1 >= model.C1 + model.B1 + model.A1)
-            model.V2_capacity = pyo.Constraint(expr=v2_capacity * model.V2 >= model.B2 + model.A2)
-            model.assign_C_to_V1 = pyo.Constraint(expr=model.C1 == D_c_count)
-            model.assign_B_to_V1 = pyo.Constraint(expr=model.B1 <= v1_capacity * model.V1 - model.C1)
-            model.assign_remaining_B_to_V2 = pyo.Constraint(expr=model.B2 == D_b_count - model.B1)
-            model.assign_A_to_V1 = pyo.Constraint(expr=model.A1 <= v1_capacity * model.V1 - model.C1 - model.B1)
-            model.assign_A_to_V2 = pyo.Constraint(expr=model.A2 <= v2_capacity * model.V2 - model.B2)
+            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+            solver.Add(v2_capacity * V2 >= B2 + A2)
+            solver.Add(C1 == D_c_count)
+            solver.Add(B1 <= v1_capacity * V1 - C1)
+            solver.Add(B2 == D_b_count - B1)
+            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+            solver.Add(A2 <= v2_capacity * V2 - B2)
+            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
         elif scenario == "Scenario 3: V1, V3":
-            model.V1_capacity = pyo.Constraint(expr=v1_capacity * model.V1 >= model.C1 + model.B1 + model.A1)
-            model.V3_capacity = pyo.Constraint(expr=v3_capacity * model.V3 >= model.A3)
-            model.assign_C_to_V1 = pyo.Constraint(expr=model.C1 == D_c_count)
-            model.assign_B_to_V1 = pyo.Constraint(expr=model.B1 <= v1_capacity * model.V1 - model.C1)
-            model.assign_A_to_V1 = pyo.Constraint(expr=model.A1 <= v1_capacity * model.V1 - model.C1 - model.B1)
-            model.assign_remaining_A_to_V3 = pyo.Constraint(expr=model.A3 == D_a_count - model.A1)
+            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+            solver.Add(v3_capacity * V3 >= A3)
+            solver.Add(C1 == D_c_count)
+            solver.Add(B1 <= v1_capacity * V1 - C1)
+            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+            solver.Add(A3 == D_a_count - A1)
+            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+            solver.Add(V3 <= max(1, (D_a_count + D_b_count) / v3_capacity))
 
-        solver = SolverFactory('glpk')
-        result = solver.solve(model)
+        # Objective
+        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
 
-        return {
-            "Status": result.solver.termination_condition,
-            "V1": pyo.value(model.V1),
-            "V2": pyo.value(model.V2),
-            "V3": pyo.value(model.V3),
-            "Total Cost": pyo.value(model.cost),
-            "Deliveries assigned to V1": pyo.value(model.C1 + model.B1 + model.A1),
-            "Deliveries assigned to V2": pyo.value(model.B2 + model.A2),
-            "Deliveries assigned to V3": pyo.value(model.A3)
-        }
+        status = solver.Solve()
+
+        if status == pywraplp.Solver.OPTIMAL:
+            return {
+                "Status": "Optimal",
+                "V1": V1.solution_value(),
+                "V2": V2.solution_value(),
+                "V3": V3.solution_value(),
+                "Total Cost": solver.Objective().Value(),
+                "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
+                "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
+                "Deliveries assigned to V3": A3.solution_value()
+            }
+        else:
+            return {
+                "Status": "Not Optimal"
+            }
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
@@ -159,7 +171,7 @@ if uploaded_file:
             df_vehicle = df_locations.loc[assignments]
 
             distance_matrix = calculate_distance_matrix(df_vehicle)
-            db = DBSCAN(eps=0.1, min_samples=1, metric='precomputed')
+            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
             db.fit(distance_matrix)
 
             labels = db.labels_
