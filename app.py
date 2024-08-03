@@ -4,19 +4,20 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
-from dotenv import load_dotenv
+import gmplot
 import streamlit as st
+from dotenv import load_dotenv
 
 # Load .env file
 load_dotenv()
 
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-
-# Streamlit app title
-st.title("Delivery Optimization App with Google Maps Integration")
+gmplot.GoogleMapPlotter.google_api_key = google_maps_api_key
 
 # Upload and read Excel file
+st.title("Delivery Optimization App with Google Maps Integration")
+
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
     df_locations = pd.read_excel(uploaded_file)
@@ -57,88 +58,70 @@ if uploaded_file:
         ("Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3")
     )
 
-    from ortools.linear_solver import pywraplp
-import pandas as pd
-import numpy as np
-from sklearn.cluster import DBSCAN
-from geopy.distance import great_circle
+    def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        if not solver:
+            return None
 
-def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
-    solver = pywraplp.Solver.CreateSolver('SCIP')
-    if not solver:
-        return None
+        V1 = solver.IntVar(0, solver.infinity(), 'V1')
+        V2 = solver.IntVar(0, solver.infinity(), 'V2')
+        V3 = solver.IntVar(0, solver.infinity(), 'V3')
 
-    V1 = solver.IntVar(0, solver.infinity(), 'V1')
-    V2 = solver.IntVar(0, solver.infinity(), 'V2')
-    V3 = solver.IntVar(0, solver.infinity(), 'V3')
+        A1 = solver.NumVar(0, solver.infinity(), 'A1')
+        B1 = solver.NumVar(0, solver.infinity(), 'B1')
+        C1 = solver.NumVar(0, solver.infinity(), 'C1')
+        A2 = solver.NumVar(0, solver.infinity(), 'A2')
+        B2 = solver.NumVar(0, solver.infinity(), 'B2')
+        A3 = solver.NumVar(0, solver.infinity(), 'A3')
 
-    A1 = solver.NumVar(0, solver.infinity(), 'A1')
-    B1 = solver.NumVar(0, solver.infinity(), 'B1')
-    C1 = solver.NumVar(0, solver.infinity(), 'C1')
-    A2 = solver.NumVar(0, solver.infinity(), 'A2')
-    B2 = solver.NumVar(0, solver.infinity(), 'B2')
-    A3 = solver.NumVar(0, solver.infinity(), 'A3')
-
-    solver.Add(A1 + A2 + A3 == D_a_count)
-    solver.Add(B1 + B2 == D_b_count)
-    solver.Add(C1 == D_c_count)
-
-    if scenario == "Scenario 1: V1, V2, V3":
-        solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
-        solver.Add(v2_capacity * V2 >= B2 + A2)
-        solver.Add(v3_capacity * V3 >= A3)
+        solver.Add(A1 + A2 + A3 == D_a_count)
+        solver.Add(B1 + B2 == D_b_count)
         solver.Add(C1 == D_c_count)
-        solver.Add(B1 <= v1_capacity * V1 - C1)
-        solver.Add(B2 == D_b_count - B1)
-        solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
-        solver.Add(A2 <= v2_capacity * V2 - B2)
-        solver.Add(A3 == D_a_count - A1 - A2)
-        solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-        solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
-    elif scenario == "Scenario 2: V1, V2":
-        solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
-        solver.Add(v2_capacity * V2 >= B2 + A2)
-        solver.Add(C1 == D_c_count)
-        solver.Add(B1 <= v1_capacity * V1 - C1)
-        solver.Add(B2 == D_b_count - B1)
-        solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
-        solver.Add(A2 <= v2_capacity * V2 - B2)
-        solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-        solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
-        solver.Add(V3 == 0)
-        solver.Add(A3 == 0)
-    elif scenario == "Scenario 3: V1, V3":
-        solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
-        solver.Add(v3_capacity * V3 >= A3)
-        solver.Add(C1 == D_c_count)
-        solver.Add(B1 <= v1_capacity * V1 - C1)
-        solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
-        solver.Add(A3 == D_a_count - A1)
-        solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-        solver.Add(V3 <= max(1, (D_a_count + D_b_count) / v3_capacity))
-        solver.Add(V2 == 0)
-        solver.Add(B2 == 0)
-        solver.Add(A2 == 0)
 
-    solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
+        if scenario == "Scenario 1: V1, V2, V3":
+            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+            solver.Add(v2_capacity * V2 >= B2 + A2)
+            solver.Add(v3_capacity * V3 >= A3)
+            solver.Add(C1 == D_c_count)
+            solver.Add(B1 <= v1_capacity * V1 - C1)
+            solver.Add(B2 == D_b_count - B1)
+            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+            solver.Add(A2 <= v2_capacity * V2 - B2)
+            solver.Add(A3 == D_a_count - A1 - A2)
+            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
+        elif scenario == "Scenario 2: V1, V2":
+            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+            solver.Add(v2_capacity * V2 >= B2 + A2)
+            solver.Add(C1 == D_c_count)
+            solver.Add(B1 <= v1_capacity * V1 - C1)
+            solver.Add(B2 == D_b_count - B1)
+            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+            solver.Add(A2 <= v2_capacity * V2 - B2)
+            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
+            solver.Add(V3 == 0)
+            solver.Add(A3 == 0)
+        elif scenario == "Scenario 3: V1, V3":
+            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+            solver.Add(v3_capacity * V3 >= A3)
+            solver.Add(C1 == D_c_count)
+            solver.Add(B1 <= v1_capacity * V1 - C1)
+            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+            solver.Add(A3 == D_a_count - A1)
+            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+            solver.Add(V3 <= max(1, (D_a_count + D_b_count) / v3_capacity))
+            solver.Add(V2 == 0)
+            solver.Add(B2 == 0)
+            solver.Add(A2 == 0)
 
-    status = solver.Solve()
+        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
 
-    if status == pywraplp.Solver.OPTIMAL:
-        return {
-            "Status": "Optimal",
-            "V1": V1.solution_value(),
-            "V2": V2.solution_value(),
-            "V3": V3.solution_value(),
-            "Total Cost": solver.Objective().Value(),
-            "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
-            "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
-            "Deliveries assigned to V3": A3.solution_value()
-        }
-    else:
-        return {
-            "Status": "Not Optimal",
-            "Result": {
+        status = solver.Solve()
+
+        if status == pywraplp.Solver.OPTIMAL:
+            return {
+                "Status": "Optimal",
                 "V1": V1.solution_value(),
                 "V2": V2.solution_value(),
                 "V3": V3.solution_value(),
@@ -147,33 +130,40 @@ def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1
                 "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
                 "Deliveries assigned to V3": A3.solution_value()
             }
-        }
-
+        else:
+            return {
+                "Status": "Not Optimal",
+                "Result": {
+                    "V1": V1.solution_value(),
+                    "V2": V2.solution_value(),
+                    "V3": V3.solution_value(),
+                    "Total Cost": solver.Objective().Value(),
+                    "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
+                    "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
+                    "Deliveries assigned to V3": A3.solution_value()
+                }
+            }
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
         st.write("Load Optimization Results:")
         st.write(f"Status: {result['Status']}")
-        if result['Status'] == "Optimal":
-            st.write(f"V1: {result['V1']}")
-            st.write(f"V2: {result['V2']}")
-            st.write(f"V3: {result['V3']}")
-            st.write(f"Total Cost: {result['Total Cost']}")
-            st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
-            st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
-            st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
+        st.write(f"V1: {result['V1']}")
+        st.write(f"V2: {result['V2']}")
+        st.write(f"V3: {result['V3']}")
+        st.write(f"Total Cost: {result['Total Cost']}")
+        st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
+        st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
+        st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
 
-            vehicle_assignments = {
-                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-            }
+        vehicle_assignments = {
+            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
+        }
 
-            st.session_state.vehicle_assignments = vehicle_assignments
-            st.write("Vehicle Assignments:", vehicle_assignments)
-        else:
-            st.write("Optimization did not reach optimal status. Here are the partial results:")
-            st.write(result["Result"])
+        st.session_state.vehicle_assignments = vehicle_assignments
+        st.write("Vehicle Assignments:", vehicle_assignments)
 
     def calculate_distance_matrix(df):
         distance_matrix = np.zeros((len(df), len(df)))
@@ -189,6 +179,9 @@ def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1
 
         for vehicle, assignments in vehicle_assignments.items():
             df_vehicle = df_locations.loc[assignments]
+
+            if df_vehicle.empty:
+                continue
 
             distance_matrix = calculate_distance_matrix(df_vehicle)
             db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
@@ -255,7 +248,9 @@ def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1
 
         def generate_excel(vehicle_routes, summary_df):
             file_path = '/mnt/data/optimized_routes.xlsx'
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            directory = os.path.dirname(file_path)
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
 
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
                 for vehicle, routes in vehicle_routes.items():
