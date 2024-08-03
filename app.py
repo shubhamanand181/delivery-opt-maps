@@ -59,61 +59,61 @@ if uploaded_file:
     )
 
     def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
-    lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
-    V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
-    V2 = pulp.LpVariable('V2', lowBound=0, cat='Integer')
-    V3 = pulp.LpVariable('V3', lowBound=0, cat='Integer')
+        lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
+        V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
+        V2 = pulp.LpVariable('V2', lowBound=0, cat='Integer')
+        V3 = pulp.LpVariable('V3', lowBound=0, cat='Integer')
 
-    A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
-    B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
-    C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
-    A2 = pulp.LpVariable('A2', lowBound=0, cat='Continuous')
-    B2 = pulp.LpVariable('B2', lowBound=0, cat='Continuous')
-    A3 = pulp.LpVariable('A3', lowBound=0, cat='Continuous')
+        A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
+        B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
+        C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
+        A2 = pulp.LpVariable('A2', lowBound=0, cat='Continuous')
+        B2 = pulp.LpVariable('B2', lowBound=0, cat='Continuous')
+        A3 = pulp.LpVariable('A3', lowBound=0, cat='Continuous')
 
-    lp_problem += cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3, "Total Cost"
-    lp_problem += A1 + A2 + A3 == D_a_count, "Total_Deliveries_A_Constraint"
-    lp_problem += B1 + B2 == D_b_count, "Total_Deliveries_B_Constraint"
-    lp_problem += C1 == D_c_count, "Total_Deliveries_C_Constraint"
+        lp_problem += cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3, "Total Cost"
+        lp_problem += A1 + A2 + A3 == D_a_count, "Total_Deliveries_A_Constraint"
+        lp_problem += B1 + B2 == D_b_count, "Total_Deliveries_B_Constraint"
+        lp_problem += C1 == D_c_count, "Total_Deliveries_C_Constraint"
 
-    if scenario == "Scenario 1: V1, V2, V3":
-        lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
-        lp_problem += v2_capacity * V2 >= B2 + A2, "V2_Capacity_Constraint"
-        lp_problem += v3_capacity * V3 >= A3, "V3_Capacity_Constraint"
-        lp_problem += C1 == D_c_count, "Assign_C_To_V1"
-        lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
-        lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
-        lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-        lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
-        lp_problem += A3 == D_a_count - A1 - A2, "Assign_Remaining_A_To_V3"
-    elif scenario == "Scenario 2: V1, V2":
-        lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
-        lp_problem += v2_capacity * V2 >= B2 + A2, "V2_Capacity_Constraint"
-        lp_problem += C1 == D_c_count, "Assign_C_To_V1"
-        lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
-        lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
-        lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-        lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
-    elif scenario == "Scenario 3: V1, V3":
-        lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
-        lp_problem += v3_capacity * V3 >= A3, "V3_Capacity_Constraint"
-        lp_problem += C1 == D_c_count, "Assign_C_To_V1"
-        lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
-        lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-        lp_problem += A3 == D_a_count - A1, "Assign_Remaining_A_To_V3"
+        if scenario == "Scenario 1: V1, V2, V3":
+            lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
+            lp_problem += v2_capacity * V2 >= B2 + A2, "V2_Capacity_Constraint"
+            lp_problem += v3_capacity * V3 >= A3, "V3_Capacity_Constraint"
+            lp_problem += C1 == D_c_count, "Assign_C_To_V1"
+            lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
+            lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
+            lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
+            lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
+            lp_problem += A3 == D_a_count - A1 - A2, "Assign_Remaining_A_To_V3"
+        elif scenario == "Scenario 2: V1, V2":
+            lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
+            lp_problem += v2_capacity * V2 >= B2 + A2, "V2_Capacity_Constraint"
+            lp_problem += C1 == D_c_count, "Assign_C_To_V1"
+            lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
+            lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
+            lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
+            lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
+        elif scenario == "Scenario 3: V1, V3":
+            lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
+            lp_problem += v3_capacity * V3 >= A3, "V3_Capacity_Constraint"
+            lp_problem += C1 == D_c_count, "Assign_C_To_V1"
+            lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
+            lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
+            lp_problem += A3 == D_a_count - A1, "Assign_Remaining_A_To_V3"
 
-    lp_problem.solve()  # Use the default solver by not specifying any
+        lp_problem.solve()  # Use the default solver by not specifying any
 
-    return {
-        "Status": pulp.LpStatus[lp_problem.status],
-        "V1": pulp.value(V1),
-        "V2": pulp.value(V2),
-        "V3": pulp.value(V3),
-        "Total Cost": pulp.value(lp_problem.objective),
-        "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
-        "Deliveries assigned to V2": pulp.value(B2 + A2),
-        "Deliveries assigned to V3": pulp.value(A3)
-    }
+        return {
+            "Status": pulp.LpStatus[lp_problem.status],
+            "V1": pulp.value(V1),
+            "V2": pulp.value(V2),
+            "V3": pulp.value(V3),
+            "Total Cost": pulp.value(lp_problem.objective),
+            "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
+            "Deliveries assigned to V2": pulp.value(B2 + A2),
+            "Deliveries assigned to V3": pulp.value(A3)
+        }
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
