@@ -8,3 +8,4 @@ gmplot
 openpyxl
 xlsxwriter
 python-dotenv
+gmaps
