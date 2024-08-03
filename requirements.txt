@@ -3,7 +3,6 @@ pandas
 numpy
 scikit-learn
 geopy
-pulp
+pyomo
 gmplot
 python-dotenv
-coin-or-tools
