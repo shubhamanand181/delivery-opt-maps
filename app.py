@@ -15,13 +15,15 @@ load_dotenv()
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 gmplot.GoogleMapPlotter.google_api_key = google_maps_api_key
 
-# Upload and read Excel file
+# Title of the app
 st.title("Delivery Optimization App with Google Maps Integration")
 
+# File uploader
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
+
 if uploaded_file:
     df_locations = pd.read_excel(uploaded_file)
-    
+
     # Display the column names to verify
     st.write("Column Names:", df_locations.columns)
 
@@ -45,7 +47,7 @@ if uploaded_file:
 
     D_a, D_b, D_c = categorize_weights(df_locations)
 
-    # Load optimization
+    # Load optimization input fields
     cost_v1 = st.number_input("Enter cost for V1:", value=62.8156)
     cost_v2 = st.number_input("Enter cost for V2:", value=33.0)
     cost_v3 = st.number_input("Enter cost for V3:", value=29.0536)
@@ -53,11 +55,13 @@ if uploaded_file:
     v2_capacity = st.number_input("Enter capacity for V2:", value=66)
     v3_capacity = st.number_input("Enter capacity for V3:", value=72)
 
+    # Scenario selection
     scenario = st.selectbox(
         "Select a scenario:",
         ("Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3")
     )
 
+    # Load optimization function
     def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
         lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
         V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
