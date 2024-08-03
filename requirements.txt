@@ -6,6 +6,6 @@ geopy
 pulp
 gmplot
 openpyxl
-xlsxwriter
 python-dotenv
 gmaps
+coin-or-cbc
