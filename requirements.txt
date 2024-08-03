@@ -4,5 +4,5 @@ numpy==1.23.5
 scikit-learn==1.2.2
 geopy==2.2.0
 gmplot==1.4.1
-ortools==9.5
+ortools==9.10.4067
 pyomo==6.4.2
