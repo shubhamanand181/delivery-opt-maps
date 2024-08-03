@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
-import pulp
+import pyomo.environ as pyo
+from pyomo.opt import SolverFactory
 import gmplot
 from dotenv import load_dotenv
 import streamlit as st
@@ -59,60 +60,66 @@ if uploaded_file:
     )
 
     def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
-        lp_problem = pulp.LpProblem("Delivery_Cost_Minimization", pulp.LpMinimize)
-        V1 = pulp.LpVariable('V1', lowBound=0, cat='Integer')
-        V2 = pulp.LpVariable('V2', lowBound=0, cat='Integer')
-        V3 = pulp.LpVariable('V3', lowBound=0, cat='Integer')
+        model = pyo.ConcreteModel()
 
-        A1 = pulp.LpVariable('A1', lowBound=0, cat='Continuous')
-        B1 = pulp.LpVariable('B1', lowBound=0, cat='Continuous')
-        C1 = pulp.LpVariable('C1', lowBound=0, cat='Continuous')
-        A2 = pulp.LpVariable('A2', lowBound=0, cat='Continuous')
-        B2 = pulp.LpVariable('B2', lowBound=0, cat='Continuous')
-        A3 = pulp.LpVariable('A3', lowBound=0, cat='Continuous')
+        model.V1 = pyo.Var(within=pyo.NonNegativeIntegers)
+        model.V2 = pyo.Var(within=pyo.NonNegativeIntegers)
+        model.V3 = pyo.Var(within=pyo.NonNegativeIntegers)
 
-        lp_problem += cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3, "Total Cost"
-        lp_problem += A1 + A2 + A3 == D_a_count, "Total_Deliveries_A_Constraint"
-        lp_problem += B1 + B2 == D_b_count, "Total_Deliveries_B_Constraint"
-        lp_problem += C1 == D_c_count, "Total_Deliveries_C_Constraint"
+        model.A1 = pyo.Var(within=pyo.NonNegativeReals)
+        model.B1 = pyo.Var(within=pyo.NonNegativeReals)
+        model.C1 = pyo.Var(within=pyo.NonNegativeReals)
+        model.A2 = pyo.Var(within=pyo.NonNegativeReals)
+        model.B2 = pyo.Var(within=pyo.NonNegativeReals)
+        model.A3 = pyo.Var(within=pyo.NonNegativeReals)
+
+        model.cost = pyo.Objective(
+            expr=cost_v1 * model.V1 + cost_v2 * model.V2 + cost_v3 * model.V3,
+            sense=pyo.minimize
+        )
+
+        model.total_deliveries_A = pyo.Constraint(expr=model.A1 + model.A2 + model.A3 == D_a_count)
+        model.total_deliveries_B = pyo.Constraint(expr=model.B1 + model.B2 == D_b_count)
+        model.total_deliveries_C = pyo.Constraint(expr=model.C1 == D_c_count)
 
         if scenario == "Scenario 1: V1, V2, V3":
-            lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
-            lp_problem += v2_capacity * V2 >= B2 + A2, "V2_Capacity_Constraint"
-            lp_problem += v3_capacity * V3 >= A3, "V3_Capacity_Constraint"
-            lp_problem += C1 == D_c_count, "Assign_C_To_V1"
-            lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
-            lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
-            lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-            lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
-            lp_problem += A3 == D_a_count - A1 - A2, "Assign_Remaining_A_To_V3"
+            model.V1_capacity = pyo.Constraint(expr=v1_capacity * model.V1 >= model.C1 + model.B1 + model.A1)
+            model.V2_capacity = pyo.Constraint(expr=v2_capacity * model.V2 >= model.B2 + model.A2)
+            model.V3_capacity = pyo.Constraint(expr=v3_capacity * model.V3 >= model.A3)
+            model.assign_C_to_V1 = pyo.Constraint(expr=model.C1 == D_c_count)
+            model.assign_B_to_V1 = pyo.Constraint(expr=model.B1 <= v1_capacity * model.V1 - model.C1)
+            model.assign_remaining_B_to_V2 = pyo.Constraint(expr=model.B2 == D_b_count - model.B1)
+            model.assign_A_to_V1 = pyo.Constraint(expr=model.A1 <= v1_capacity * model.V1 - model.C1 - model.B1)
+            model.assign_A_to_V2 = pyo.Constraint(expr=model.A2 <= v2_capacity * model.V2 - model.B2)
+            model.assign_remaining_A_to_V3 = pyo.Constraint(expr=model.A3 == D_a_count - model.A1 - model.A2)
         elif scenario == "Scenario 2: V1, V2":
-            lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
-            lp_problem += v2_capacity * V2 >= B2 + A2, "V2_Capacity_Constraint"
-            lp_problem += C1 == D_c_count, "Assign_C_To_V1"
-            lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
-            lp_problem += B2 == D_b_count - B1, "Assign_Remaining_B_To_V2"
-            lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-            lp_problem += A2 <= v2_capacity * V2 - B2, "Assign_A_To_V2"
+            model.V1_capacity = pyo.Constraint(expr=v1_capacity * model.V1 >= model.C1 + model.B1 + model.A1)
+            model.V2_capacity = pyo.Constraint(expr=v2_capacity * model.V2 >= model.B2 + model.A2)
+            model.assign_C_to_V1 = pyo.Constraint(expr=model.C1 == D_c_count)
+            model.assign_B_to_V1 = pyo.Constraint(expr=model.B1 <= v1_capacity * model.V1 - model.C1)
+            model.assign_remaining_B_to_V2 = pyo.Constraint(expr=model.B2 == D_b_count - model.B1)
+            model.assign_A_to_V1 = pyo.Constraint(expr=model.A1 <= v1_capacity * model.V1 - model.C1 - model.B1)
+            model.assign_A_to_V2 = pyo.Constraint(expr=model.A2 <= v2_capacity * model.V2 - model.B2)
         elif scenario == "Scenario 3: V1, V3":
-            lp_problem += v1_capacity * V1 >= C1 + B1 + A1, "V1_Capacity_Constraint"
-            lp_problem += v3_capacity * V3 >= A3, "V3_Capacity_Constraint"
-            lp_problem += C1 == D_c_count, "Assign_C_To_V1"
-            lp_problem += B1 <= v1_capacity * V1 - C1, "Assign_B_To_V1"
-            lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
-            lp_problem += A3 == D_a_count - A1, "Assign_Remaining_A_To_V3"
+            model.V1_capacity = pyo.Constraint(expr=v1_capacity * model.V1 >= model.C1 + model.B1 + model.A1)
+            model.V3_capacity = pyo.Constraint(expr=v3_capacity * model.V3 >= model.A3)
+            model.assign_C_to_V1 = pyo.Constraint(expr=model.C1 == D_c_count)
+            model.assign_B_to_V1 = pyo.Constraint(expr=model.B1 <= v1_capacity * model.V1 - model.C1)
+            model.assign_A_to_V1 = pyo.Constraint(expr=model.A1 <= v1_capacity * model.V1 - model.C1 - model.B1)
+            model.assign_remaining_A_to_V3 = pyo.Constraint(expr=model.A3 == D_a_count - model.A1)
 
-        lp_problem.solve(pulp.PULP_CBC_CMD())  # Use the default solver by not specifying any
+        solver = SolverFactory('glpk')
+        result = solver.solve(model)
 
         return {
-            "Status": pulp.LpStatus[lp_problem.status],
-            "V1": pulp.value(V1),
-            "V2": pulp.value(V2),
-            "V3": pulp.value(V3),
-            "Total Cost": pulp.value(lp_problem.objective),
-            "Deliveries assigned to V1": pulp.value(C1 + B1 + A1),
-            "Deliveries assigned to V2": pulp.value(B2 + A2),
-            "Deliveries assigned to V3": pulp.value(A3)
+            "Status": result.solver.termination_condition,
+            "V1": pyo.value(model.V1),
+            "V2": pyo.value(model.V2),
+            "V3": pyo.value(model.V3),
+            "Total Cost": pyo.value(model.cost),
+            "Deliveries assigned to V1": pyo.value(model.C1 + model.B1 + model.A1),
+            "Deliveries assigned to V2": pyo.value(model.B2 + model.A2),
+            "Deliveries assigned to V3": pyo.value(model.A3)
         }
 
     if st.button("Optimize Load"):
