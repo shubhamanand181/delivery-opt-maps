@@ -4,7 +4,6 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
-import gmplot
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -13,7 +12,6 @@ load_dotenv()
 
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-gmplot.GoogleMapPlotter.google_api_key = google_maps_api_key
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
@@ -180,9 +178,6 @@ if uploaded_file:
         for vehicle, assignments in vehicle_assignments.items():
             df_vehicle = df_locations.loc[assignments]
 
-            if df_vehicle.empty:
-                continue
-
             distance_matrix = calculate_distance_matrix(df_vehicle)
             db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
             db.fit(distance_matrix)
@@ -219,15 +214,14 @@ if uploaded_file:
         latitudes = df['Latitude'].tolist()
         longitudes = df['Longitude'].tolist()
 
-        gmap = gmplot.GoogleMapPlotter(latitudes[0], longitudes[0], 13)
-        gmap.scatter(latitudes, longitudes, '#FF0000', size=40, marker=False)
-        gmap.plot(latitudes, longitudes, 'cornflowerblue', edge_width=2.5)
+        origin = f"{latitudes[0]},{longitudes[0]}"
+        destination = f"{latitudes[-1]},{longitudes[-1]}"
+        waypoints = '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
 
-        file_path = f"/mnt/data/{map_name}.html"
-        gmap.draw(file_path)
-        st.write(f"Map for {map_name} saved")
+        google_maps_link = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&travelmode=driving&waypoints={waypoints}"
+        st.write(f"Map for {map_name}: [Open in Google Maps]({google_maps_link})")
 
-        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
+        return google_maps_link
 
     def render_cluster_maps(df_locations):
         if 'vehicle_assignments' not in st.session_state:
@@ -245,21 +239,6 @@ if uploaded_file:
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
-
-        def generate_excel(vehicle_routes, summary_df):
-            file_path = '/mnt/data/optimized_routes.xlsx'
-            directory = os.path.dirname(file_path)
-            if not os.path.exists(directory):
-                os.makedirs(directory, exist_ok=True)
-
-            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                for vehicle, routes in vehicle_routes.items():
-                    for idx, route_df in enumerate(routes):
-                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            st.write(f"[Download Excel file](optimized_routes.xlsx)")
-
-        generate_excel(vehicle_routes, summary_df)
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
