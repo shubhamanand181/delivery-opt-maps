@@ -1,8 +1,10 @@
 streamlit
 pandas
-numpy
+numpy==1.21.6
 scikit-learn
 geopy
 pyomo
 gmplot
 python-dotenv
+openpyxl
+xlsxwriter
