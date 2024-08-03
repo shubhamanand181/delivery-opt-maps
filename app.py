@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 import pulp
+import gmplot
 from dotenv import load_dotenv
 import streamlit as st
 
@@ -12,6 +13,7 @@ load_dotenv()
 
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+gmplot.GoogleMapPlotter.google_api_key = google_maps_api_key
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
