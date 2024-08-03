@@ -8,3 +8,4 @@ gmplot
 openpyxl
 python-dotenv
 gmaps
+glpk
