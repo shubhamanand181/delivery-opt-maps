@@ -106,7 +106,13 @@ if uploaded_file:
             lp_problem += A1 <= v1_capacity * V1 - C1 - B1, "Assign_A_To_V1"
             lp_problem += A3 == D_a_count - A1, "Assign_Remaining_A_To_V3"
 
+        # Solve the problem
         lp_problem.solve()
+
+        # Check solver status
+        if pulp.LpStatus[lp_problem.status] != 'Optimal':
+            st.write("Error: The solver did not find an optimal solution. Please check the input values and constraints.")
+            return None
 
         return {
             "Status": pulp.LpStatus[lp_problem.status],
@@ -121,24 +127,25 @@ if uploaded_file:
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
-        st.write("Load Optimization Results:")
-        st.write(f"Status: {result['Status']}")
-        st.write(f"V1: {result['V1']}")
-        st.write(f"V2: {result['V2']}")
-        st.write(f"V3: {result['V3']}")
-        st.write(f"Total Cost: {result['Total Cost']}")
-        st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
-        st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
-        st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
+        if result:
+            st.write("Load Optimization Results:")
+            st.write(f"Status: {result['Status']}")
+            st.write(f"V1: {result['V1']}")
+            st.write(f"V2: {result['V2']}")
+            st.write(f"V3: {result['V3']}")
+            st.write(f"Total Cost: {result['Total Cost']}")
+            st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
+            st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
+            st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
 
-        vehicle_assignments = {
-            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-        }
+            vehicle_assignments = {
+                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
+            }
 
-        st.session_state.vehicle_assignments = vehicle_assignments
-        st.write("Vehicle Assignments:", vehicle_assignments)
+            st.session_state.vehicle_assignments = vehicle_assignments
+            st.write("Vehicle Assignments:", vehicle_assignments)
 
     def calculate_distance_matrix(df):
         distance_matrix = np.zeros((len(df), len(df)))
@@ -224,6 +231,7 @@ if uploaded_file:
 
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
                 for vehicle, routes in vehicle_routes.items():
+
                     for idx, route_df in enumerate(routes):
                         route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
                 summary_df.to_excel(writer, sheet_name='Summary', index=False)
