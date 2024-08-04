@@ -56,7 +56,7 @@ if uploaded_file:
         ("Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3")
     )
 
- from ortools.linear_solver import pywraplp
+
 
 def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
     solver = pywraplp.Solver.CreateSolver('SCIP')
