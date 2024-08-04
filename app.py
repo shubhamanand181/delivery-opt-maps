@@ -245,18 +245,41 @@ if uploaded_file:
         st.write("Summary of Clusters:")
         st.table(summary_df)
 
-        def generate_excel(vehicle_routes, summary_df):
-            file_path = '/mnt/data/optimized_routes.xlsx'
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+      
 
-            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                for vehicle, routes in vehicle_routes.items():
-                    for idx, route_df in enumerate(routes):
-                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            st.write(f"[Download Excel file](optimized_routes.xlsx)")
+def generate_excel(vehicle_routes, summary_df):
+    file_path = '/mnt/data/optimized_routes.xlsx'
+    
+    # Ensure the directory exists
+    directory = os.path.dirname(file_path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+        for vehicle, routes in vehicle_routes.items():
+            for idx, route_df in enumerate(routes):
+                route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
+        summary_df.to_excel(writer, sheet_name='Summary', index=False)
+    st.write(f"[Download Excel file](optimized_routes.xlsx)")
 
-        generate_excel(vehicle_routes, summary_df)
+def render_cluster_maps(df_locations):
+    if 'vehicle_assignments' not in st.session_state:
+        st.write("Please optimize the load first.")
+        return
 
-    if st.button("Generate Routes"):
-        render_cluster_maps(df_locations)
+    vehicle_assignments = st.session_state.vehicle_assignments
+    vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
+
+    for vehicle, routes in vehicle_routes.items():
+        for idx, route_df in enumerate(routes):
+            route_name = f"{vehicle} Cluster {idx}"
+            link = render_map(route_df, route_name)
+            st.write(f"[{route_name}]({link})")
+
+    st.write("Summary of Clusters:")
+    st.table(summary_df)
+
+    generate_excel(vehicle_routes, summary_df)
+
+# Call the function as needed
+render_cluster_maps(df_locations)
