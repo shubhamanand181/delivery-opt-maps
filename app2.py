@@ -18,7 +18,7 @@ st.title("Delivery Optimization App with Google Maps Integration")
 
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
-    df_locations = pd.read_excel(uploaded_file)
+    df_locations = pd.read_excel(uploaded_file)  # Ensure openpyxl is in requirements.txt
     
     # Display the column names to verify
     st.write("Column Names:", df_locations.columns)
@@ -186,7 +186,7 @@ if uploaded_file:
 
             distance_matrix = calculate_distance_matrix(df_vehicle)
             if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
-                st.write(f"Invalid values in distance_matrix for {vehicle}")
+                st.write(f"Invalid values in distance matrix for {vehicle}")
                 continue
 
             db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
@@ -246,13 +246,19 @@ if uploaded_file:
         st.table(summary_df)
 
         def generate_excel(vehicle_routes, summary_df):
-            file_path = '/mnt/data/optimized_routes.xlsx'
+            file_path = 'optimized_routes.xlsx'
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
                 for vehicle, routes in vehicle_routes.items():
                     for idx, route_df in enumerate(routes):
                         route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
                 summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            st.write(f"[Download Excel file](optimized_routes.xlsx)")
+            with open(file_path, "rb") as f:
+                st.download_button(
+                    label="Download Excel file",
+                    data=f,
+                    file_name="optimized_routes.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
         generate_excel(vehicle_routes, summary_df)
 
