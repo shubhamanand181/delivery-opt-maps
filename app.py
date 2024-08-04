@@ -164,6 +164,7 @@ if uploaded_file:
                 "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
                 "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
             }
+
             st.session_state.vehicle_assignments = vehicle_assignments
             st.write("Vehicle Assignments:", vehicle_assignments)
 
@@ -180,9 +181,15 @@ if uploaded_file:
         summary_data = []
 
         for vehicle, assignments in vehicle_assignments.items():
+            if not assignments:
+                continue  # Skip if no assignments for the vehicle
+
             df_vehicle = df_locations.loc[assignments]
 
             distance_matrix = calculate_distance_matrix(df_vehicle)
+            if distance_matrix.shape[0] < 2:
+                continue  # Skip clustering if there's only one location
+
             db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
             db.fit(distance_matrix)
 
@@ -218,9 +225,17 @@ if uploaded_file:
         latitudes = df['Latitude'].tolist()
         longitudes = df['Longitude'].tolist()
 
+        if len(latitudes) < 2:
+            st.write(f"Not enough locations to generate a map for {map_name}")
+            return ""
+
         gmap = gmplot.GoogleMapPlotter(latitudes[0], longitudes[0], 13)
         gmap.scatter(latitudes, longitudes, '#FF0000', size=40, marker=False)
         gmap.plot(latitudes, longitudes, 'cornflowerblue', edge_width=2.5)
+
+        file_path = f"/mnt/data/{map_name}.html"
+        gmap.draw(file_path)
+        st.write(f"Map for {map_name} saved")
 
         return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
 
@@ -236,16 +251,15 @@ if uploaded_file:
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
                 link = render_map(route_df, route_name)
-                st.write(f"[{route_name}]({link})")
+                if link:
+                    st.write(f"[{route_name}]({link})")
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
 
         def generate_excel(vehicle_routes, summary_df):
             file_path = '/mnt/data/optimized_routes.xlsx'
-            directory = os.path.dirname(file_path)
-            if not os.path.exists(directory):
-                os.makedirs(directory)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
             with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
                 for vehicle, routes in vehicle_routes.items():
