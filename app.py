@@ -56,87 +56,91 @@ if uploaded_file:
         ("Scenario 1: V1, V2, V3", "Scenario 2: V1, V2", "Scenario 3: V1, V3")
     )
 
-    def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
-        solver = pywraplp.Solver.CreateSolver('SCIP')
-        if not solver:
-            return None
+ from ortools.linear_solver import pywraplp
 
-        # Variables
-        V1 = solver.IntVar(0, solver.infinity(), 'V1')
-        V2 = solver.IntVar(0, solver.infinity(), 'V2')
-        V3 = solver.IntVar(0, solver.infinity(), 'V3')
+def optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario):
+    solver = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver:
+        return None
 
-        A1 = solver.NumVar(0, solver.infinity(), 'A1')
-        B1 = solver.NumVar(0, solver.infinity(), 'B1')
-        C1 = solver.NumVar(0, solver.infinity(), 'C1')
-        A2 = solver.NumVar(0, solver.infinity(), 'A2')
-        B2 = solver.NumVar(0, solver.infinity(), 'B2')
-        A3 = solver.NumVar(0, solver.infinity(), 'A3')
+    # Variables
+    V1 = solver.IntVar(0, solver.infinity(), 'V1')
+    V2 = solver.IntVar(0, solver.infinity(), 'V2')
+    V3 = solver.IntVar(0, solver.infinity(), 'V3')
 
-        # Constraints
-        solver.Add(A1 + A2 + A3 == D_a_count)
-        solver.Add(B1 + B2 == D_b_count)
+    A1 = solver.NumVar(0, solver.infinity(), 'A1')
+    B1 = solver.NumVar(0, solver.infinity(), 'B1')
+    C1 = solver.NumVar(0, solver.infinity(), 'C1')
+    A2 = solver.NumVar(0, solver.infinity(), 'A2')
+    B2 = solver.NumVar(0, solver.infinity(), 'B2')
+    A3 = solver.NumVar(0, solver.infinity(), 'A3')
+
+    # Constraints
+    solver.Add(A1 + A2 + A3 == D_a_count)
+    solver.Add(B1 + B2 == D_b_count)
+    solver.Add(C1 == D_c_count)
+
+    if scenario == "Scenario 1: V1, V2, V3":
+        solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+        solver.Add(v2_capacity * V2 >= B2 + A2)
+        solver.Add(v3_capacity * V3 >= A3)
         solver.Add(C1 == D_c_count)
+        solver.Add(B1 <= v1_capacity * V1 - C1)
+        solver.Add(B2 == D_b_count - B1)
+        solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+        solver.Add(A2 <= v2_capacity * V2 - B2)
+        solver.Add(A3 == D_a_count - A1 - A2)
+        solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+        solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
+    elif scenario == "Scenario 2: V1, V2":
+        solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+        solver.Add(v2_capacity * V2 >= B2 + A2)
+        solver.Add(C1 == D_c_count)
+        solver.Add(B1 <= v1_capacity * V1 - C1)
+        solver.Add(B2 == D_b_count - B1)
+        solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+        solver.Add(A2 <= v2_capacity * V2 - B2)
+        solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+        solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
+    elif scenario == "Scenario 3: V1, V3":
+        solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
+        solver.Add(v3_capacity * V3 >= A3)
+        solver.Add(C1 == D_c_count)
+        solver.Add(B1 <= v1_capacity * V1 - C1)
+        solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
+        solver.Add(A3 == D_a_count - A1)
+        solver.Add(V1 <= max(1, D_c_count / v1_capacity))
+        solver.Add(V3 <= max(1, (D_a_count + D_b_count) / v3_capacity))
 
-        if scenario == "Scenario 1: V1, V2, V3":
-            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
-            solver.Add(v2_capacity * V2 >= B2 + A2)
-            solver.Add(v3_capacity * V3 >= A3)
-            solver.Add(C1 == D_c_count)
-            solver.Add(B1 <= v1_capacity * V1 - C1)
-            solver.Add(B2 == D_b_count - B1)
-            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
-            solver.Add(A2 <= v2_capacity * V2 - B2)
-            solver.Add(A3 == D_a_count - A1 - A2)
-            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
-        elif scenario == "Scenario 2: V1, V2":
-            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
-            solver.Add(v2_capacity * V2 >= B2 + A2)
-            solver.Add(C1 == D_c_count)
-            solver.Add(B1 <= v1_capacity * V1 - C1)
-            solver.Add(B2 == D_b_count - B1)
-            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
-            solver.Add(A2 <= v2_capacity * V2 - B2)
-            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
-        elif scenario == "Scenario 3: V1, V3":
-            solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
-            solver.Add(v3_capacity * V3 >= A3)
-            solver.Add(C1 == D_c_count)
-            solver.Add(B1 <= v1_capacity * V1 - C1)
-            solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
-            solver.Add(A3 == D_a_count - A1)
-            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-            solver.Add(V3 <= max(1, (D_a_count + D_b_count) / v3_capacity))
+    # Objective
+    solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
 
-        # Objective
-        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
+    status = solver.Solve()
 
-        status = solver.Solve()
+    if status == pywraplp.Solver.OPTIMAL:
+        return {
+            "Status": "Optimal",
+            "V1": V1.solution_value(),
+            "V2": V2.solution_value(),
+            "V3": V3.solution_value(),
+            "Total Cost": solver.Objective().Value(),
+            "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
+            "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
+            "Deliveries assigned to V3": A3.solution_value()
+        }
+    else:
+        return {
+            "Status": "Not Optimal",
+            "V1": V1.solution_value() if V1.solution_value() else 0,
+            "V2": V2.solution_value() if V2.solution_value() else 0,
+            "V3": V3.solution_value() if V3.solution_value() else 0,
+            "Total Cost": solver.Objective().Value() if solver.Objective().Value() else 0,
+            "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
+            "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
+            "Deliveries assigned to V3": A3.solution_value()
+        }
 
-        if status == pywraplp.Solver.OPTIMAL:
-            return {
-                "Status": "Optimal",
-                "V1": V1.solution_value(),
-                "V2": V2.solution_value(),
-                "V3": V3.solution_value(),
-                "Total Cost": solver.Objective().Value(),
-                "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
-                "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
-                "Deliveries assigned to V3": A3.solution_value()
-            }
-        else:
-            return {
-                "Status": "Not Optimal",
-                "V1": V1.solution_value(),
-                "V2": V2.solution_value(),
-                "V3": V3.solution_value(),
-                "Total Cost": solver.Objective().Value(),
-                "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
-                "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
-                "Deliveries assigned to V3": A3.solution_value()
-            }
+# Now test this updated function in Streamlit to ensure it behaves as expected.
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
