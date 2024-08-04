@@ -88,8 +88,6 @@ if uploaded_file:
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A2 <= v2_capacity * V2 - B2)
             solver.Add(A3 == D_a_count - A1 - A2)
-            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
         elif scenario == "Scenario 2: V1, V2":
             solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
             solver.Add(v2_capacity * V2 >= B2 + A2)
@@ -98,8 +96,8 @@ if uploaded_file:
             solver.Add(B2 == D_b_count - B1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A2 <= v2_capacity * V2 - B2)
-            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-            solver.Add(V2 <= max(1, (D_b_count + D_a_count) / v2_capacity))
+            solver.Add(V3 == 0)  # Ensure V3 is not used
+            solver.Add(A3 == 0)  # Ensure A3 is not used
         elif scenario == "Scenario 3: V1, V3":
             solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
             solver.Add(v3_capacity * V3 >= A3)
@@ -107,8 +105,9 @@ if uploaded_file:
             solver.Add(B1 <= v1_capacity * V1 - C1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A3 == D_a_count - A1)
-            solver.Add(V1 <= max(1, D_c_count / v1_capacity))
-            solver.Add(V3 <= max(1, (D_a_count + D_b_count) / v3_capacity))
+            solver.Add(V2 == 0)  # Ensure V2 is not used
+            solver.Add(B2 == 0)  # Ensure B2 is not used
+            solver.Add(A2 == 0)  # Ensure A2 is not used
 
         # Objective
         solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
@@ -129,35 +128,43 @@ if uploaded_file:
         else:
             return {
                 "Status": "Not Optimal",
-                "V1": V1.solution_value() if V1.solution_value() else 0,
-                "V2": V2.solution_value() if V2.solution_value() else 0,
-                "V3": V3.solution_value() if V3.solution_value() else 0,
-                "Total Cost": solver.Objective().Value() if solver.Objective().Value() else 0,
-                "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
-                "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
-                "Deliveries assigned to V3": A3.solution_value()
+                "Result": {
+                    "V1": V1.solution_value(),
+                    "V2": V2.solution_value(),
+                    "V3": V3.solution_value(),
+                    "Total Cost": solver.Objective().Value(),
+                    "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
+                    "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
+                    "Deliveries assigned to V3": A3.solution_value()
+                }
             }
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
         st.write("Load Optimization Results:")
         st.write(f"Status: {result['Status']}")
-        st.write(f"V1: {result['V1']}")
-        st.write(f"V2: {result['V2']}")
-        st.write(f"V3: {result['V3']}")
-        st.write(f"Total Cost: {result['Total Cost']}")
-        st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
-        st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
-        st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
+        
+        if result['Status'] == "Optimal":
+            st.write(f"V1: {result['V1']}")
+            st.write(f"V2: {result['V2']}")
+            st.write(f"V3: {result['V3']}")
+            st.write(f"Total Cost: {result['Total Cost']}")
+            st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
+            st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
+            st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
+        else:
+            st.write("Optimization did not reach optimal status. Here are the partial results:")
+            st.write(result["Result"])
 
-        vehicle_assignments = {
-            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-        }
+        if result['Status'] == "Optimal":
+            vehicle_assignments = {
+                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
+            }
 
-        st.session_state.vehicle_assignments = vehicle_assignments
-        st.write("Vehicle Assignments:", vehicle_assignments)
+            st.session_state.vehicle_assignments = vehicle_assignments
+            st.write("Vehicle Assignments:", vehicle_assignments)
 
     def calculate_distance_matrix(df):
         distance_matrix = np.zeros((len(df), len(df)))
