@@ -7,3 +7,4 @@ gmplot
 ortools
 pyomo
 python-dotenv
+openpyxl
