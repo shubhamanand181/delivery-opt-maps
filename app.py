@@ -6,6 +6,7 @@ from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
+import gmplot
 
 # Load .env file
 load_dotenv()
