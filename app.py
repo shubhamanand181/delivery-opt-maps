@@ -6,14 +6,12 @@ from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
-import gmplot
 
 # Load .env file
 load_dotenv()
 
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-gmplot.GoogleMapPlotter.google_api_key = google_maps_api_key
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
@@ -158,15 +156,14 @@ if uploaded_file:
             st.write("Optimization did not reach optimal status. Here are the partial results:")
             st.write(result["Result"])
 
-        if result['Status'] == "Optimal":
-            vehicle_assignments = {
-                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-            }
+        vehicle_assignments = {
+            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
+        }
 
-            st.session_state.vehicle_assignments = vehicle_assignments
-            st.write("Vehicle Assignments:", vehicle_assignments)
+        st.session_state.vehicle_assignments = vehicle_assignments
+        st.write("Vehicle Assignments:", vehicle_assignments)
 
     def calculate_distance_matrix(df):
         distance_matrix = np.zeros((len(df), len(df)))
@@ -181,14 +178,16 @@ if uploaded_file:
         summary_data = []
 
         for vehicle, assignments in vehicle_assignments.items():
-            if not assignments:
-                continue  # Skip if no assignments for the vehicle
-
             df_vehicle = df_locations.loc[assignments]
 
+            if df_vehicle.empty:
+                st.write(f"No assignments for {vehicle}")
+                continue
+
             distance_matrix = calculate_distance_matrix(df_vehicle)
-            if distance_matrix.shape[0] < 2:
-                continue  # Skip clustering if there's only one location
+            if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
+                st.write(f"Invalid values in distance_matrix for {vehicle}")
+                continue
 
             db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
             db.fit(distance_matrix)
@@ -198,6 +197,8 @@ if uploaded_file:
 
             for cluster in set(labels):
                 cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                if cluster_df.empty:
+                    continue
                 centroid = cluster_df[['Latitude', 'Longitude']].mean().values
                 total_distance = cluster_df.apply(lambda row: great_circle(centroid, (row['Latitude'], row['Longitude'])).kilometers, axis=1).sum()
 
@@ -225,18 +226,6 @@ if uploaded_file:
         latitudes = df['Latitude'].tolist()
         longitudes = df['Longitude'].tolist()
 
-        if len(latitudes) < 2:
-            st.write(f"Not enough locations to generate a map for {map_name}")
-            return ""
-
-        gmap = gmplot.GoogleMapPlotter(latitudes[0], longitudes[0], 13)
-        gmap.scatter(latitudes, longitudes, '#FF0000', size=40, marker=False)
-        gmap.plot(latitudes, longitudes, 'cornflowerblue', edge_width=2.5)
-
-        file_path = f"/mnt/data/{map_name}.html"
-        gmap.draw(file_path)
-        st.write(f"Map for {map_name} saved")
-
         return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
 
     def render_cluster_maps(df_locations):
@@ -251,8 +240,7 @@ if uploaded_file:
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
                 link = render_map(route_df, route_name)
-                if link:
-                    st.write(f"[{route_name}]({link})")
+                st.write(f"[{route_name}]({link})")
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
