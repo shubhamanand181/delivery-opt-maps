@@ -166,15 +166,15 @@ if uploaded_file:
             st.session_state.vehicle_assignments = vehicle_assignments
             st.write("Vehicle Assignments:", vehicle_assignments)
 
- def calculate_distance_matrix(df):
-    distance_matrix = np.zeros((len(df), len(df)))
-    for i, (lat1, lon1) in enumerate(zip(df['Latitude'], df['Longitude'])):
+      def calculate_distance_matrix(df):
+     distance_matrix = np.zeros((len(df), len(df)))
+     for i, (lat1, lon1) in enumerate(zip(df['Latitude'], df['Longitude'])):
         for j, (lat2, lon2) in enumerate(zip(df['Latitude'], df['Longitude'])):
             if i != j:
                 distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
     return distance_matrix
 
-def generate_routes(vehicle_assignments, df_locations):
+    def generate_routes(vehicle_assignments, df_locations):
     vehicle_routes = {}
     summary_data = []
 
