@@ -156,108 +156,107 @@ if uploaded_file:
             st.write("Optimization did not reach optimal status. Here are the partial results:")
             st.write(result["Result"])
 
-        if result['Status'] == "Optimal":
-            vehicle_assignments = {
-                "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-                "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
-                "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
-            }
+        vehicle_assignments = {
+            "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
+            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
+        }
 
-            st.session_state.vehicle_assignments = vehicle_assignments
-            st.write("Vehicle Assignments:", vehicle_assignments)
+        st.session_state.vehicle_assignments = vehicle_assignments
+        st.write("Vehicle Assignments:", vehicle_assignments)
 
-      def calculate_distance_matrix(df):
-     distance_matrix = np.zeros((len(df), len(df)))
-     for i, (lat1, lon1) in enumerate(zip(df['Latitude'], df['Longitude'])):
-        for j, (lat2, lon2) in enumerate(zip(df['Latitude'], df['Longitude'])):
-            if i != j:
-                distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
-    return distance_matrix
+    def calculate_distance_matrix(df):
+        distance_matrix = np.zeros((len(df), len(df)))
+        for i, (lat1, lon1) in enumerate(zip(df['Latitude'], df['Longitude'])):
+            for j, (lat2, lon2) in enumerate(zip(df['Latitude'], df['Longitude'])):
+                if i != j:
+                    distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
+        return distance_matrix
 
     def generate_routes(vehicle_assignments, df_locations):
-    vehicle_routes = {}
-    summary_data = []
+        vehicle_routes = {}
+        summary_data = []
 
-    for vehicle, assignments in vehicle_assignments.items():
-        df_vehicle = df_locations.loc[assignments]
+        for vehicle, assignments in vehicle_assignments.items():
+            df_vehicle = df_locations.loc[assignments]
 
-        if df_vehicle.empty:
-            st.write(f"No assignments for {vehicle}")
-            continue
-
-        distance_matrix = calculate_distance_matrix(df_vehicle)
-        if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
-            st.write(f"Invalid values in distance matrix for {vehicle}")
-            continue
-
-        db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
-        db.fit(distance_matrix)
-
-        labels = db.labels_
-        df_vehicle['Cluster'] = labels
-
-        for cluster in set(labels):
-            cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
-            if cluster_df.empty:
+            if df_vehicle.empty:
+                st.write(f"No assignments for {vehicle}")
                 continue
-            centroid = cluster_df[['Latitude', 'Longitude']].mean().values
-            total_distance = cluster_df.apply(lambda row: great_circle(centroid, (row['Latitude'], row['Longitude'])).kilometers, axis=1).sum()
 
-            route_name = f"{vehicle} Cluster {cluster}"
-            route_df = cluster_df.copy()
-            route_df['Distance'] = total_distance
+            distance_matrix = calculate_distance_matrix(df_vehicle)
+            if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
+                st.write(f"Invalid values in distance matrix for {vehicle}")
+                continue
 
-            if vehicle not in vehicle_routes:
-                vehicle_routes[vehicle] = []
+            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+            db.fit(distance_matrix)
 
-            vehicle_routes[vehicle].append(route_df)
-            summary_data.append({
-                'Vehicle': vehicle,
-                'Cluster': cluster,
-                'Centroid Latitude': centroid[0],
-                'Centroid Longitude': centroid[1],
-                'Number of Shops': len(cluster_df),
-                'Total Distance': total_distance
-            })
+            labels = db.labels_
+            df_vehicle['Cluster'] = labels
 
-    summary_df = pd.DataFrame(summary_data)
-    return vehicle_routes, summary_df
+            for cluster in set(labels):
+                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                if cluster_df.empty:
+                    continue
+                centroid = cluster_df[['Latitude', 'Longitude']].mean().values
+                total_distance = cluster_df.apply(lambda row: great_circle(centroid, (row['Latitude'], row['Longitude'])).kilometers, axis=1).sum()
 
-def render_map(df, map_name):
-    latitudes = df['Latitude'].tolist()
-    longitudes = df['Longitude'].tolist()
+                route_name = f"{vehicle} Cluster {cluster}"
+                route_df = cluster_df.copy()
+                route_df['Distance'] = total_distance
 
-    return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
+                if vehicle not in vehicle_routes:
+                    vehicle_routes[vehicle] = []
 
-def render_cluster_maps(df_locations):
-    if 'vehicle_assignments' not in st.session_state:
-        st.write("Please optimize the load first.")
-        return
+                vehicle_routes[vehicle].append(route_df)
+                summary_data.append({
+                    'Vehicle': vehicle,
+                    'Cluster': cluster,
+                    'Centroid Latitude': centroid[0],
+                    'Centroid Longitude': centroid[1],
+                    'Number of Shops': len(cluster_df),
+                    'Total Distance': total_distance
+                })
 
-    vehicle_assignments = st.session_state.vehicle_assignments
-    vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
+        summary_df = pd.DataFrame(summary_data)
+        return vehicle_routes, summary_df
 
-    for vehicle, routes in vehicle_routes.items():
-        for idx, route_df in enumerate(routes):
-            route_name = f"{vehicle} Cluster {idx}"
-            link = render_map(route_df, route_name)
-            st.write(f"[{route_name}]({link})")
+    def render_map(df, map_name):
+        latitudes = df['Latitude'].tolist()
+        longitudes = df['Longitude'].tolist()
 
-    st.write("Summary of Clusters:")
-    st.table(summary_df)
+        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
 
-    def generate_excel(vehicle_routes, summary_df):
-        file_path = '/mnt/data/optimized_routes.xlsx'
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    def render_cluster_maps(df_locations):
+        if 'vehicle_assignments' not in st.session_state:
+            st.write("Please optimize the load first.")
+            return
 
-        with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-            for vehicle, routes in vehicle_routes.items():
-                for idx, route_df in enumerate(routes):
-                    route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
-        st.write(f"[Download Excel file](optimized_routes.xlsx)")
+        vehicle_assignments = st.session_state.vehicle_assignments
+        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
 
-    generate_excel(vehicle_routes, summary_df)
+        for vehicle, routes in vehicle_routes.items():
+            for idx, route_df in enumerate(routes):
+                route_name = f"{vehicle} Cluster {idx}"
+                link = render_map(route_df, route_name)
+                st.write(f"[{route_name}]({link})")
+
+        st.write("Summary of Clusters:")
+        st.table(summary_df)
+
+        def generate_excel(vehicle_routes, summary_df):
+            file_path = '/mnt/data/optimized_routes.xlsx'
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+                for vehicle, routes in vehicle_routes.items():
+                    for idx, route_df in enumerate(routes):
+                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
+                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            st.write(f"[Download Excel file](optimized_routes.xlsx)")
+
+        generate_excel(vehicle_routes, summary_df)
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
