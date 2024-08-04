@@ -8,3 +8,4 @@ ortools
 pyomo
 python-dotenv
 openpyxl
+xlsxwriter
