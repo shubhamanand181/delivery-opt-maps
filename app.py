@@ -129,20 +129,20 @@ if uploaded_file:
         else:
             return {
                 "Status": "Not Optimal",
-                "V1": 0,
-                "V2": 0,
-                "V3": 0,
-                "Total Cost": 0,
-                "Deliveries assigned to V1": 0,
-                "Deliveries assigned to V2": 0,
-                "Deliveries assigned to V3": 0
+                "V1": V1.solution_value(),
+                "V2": V2.solution_value(),
+                "V3": V3.solution_value(),
+                "Total Cost": solver.Objective().Value(),
+                "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
+                "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
+                "Deliveries assigned to V3": A3.solution_value()
             }
 
     if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
         st.write("Load Optimization Results:")
         st.write(f"Status: {result['Status']}")
-        
+
         if result['Status'] == 'Optimal':
             st.write(f"V1: {result['V1']}")
             st.write(f"V2: {result['V2']}")
@@ -163,6 +163,7 @@ if uploaded_file:
         else:
             st.write("Optimization did not reach optimal status. Here are the partial results:")
             st.write(result)
+
 
     def calculate_distance_matrix(df):
         distance_matrix = np.zeros((len(df), len(df)))
