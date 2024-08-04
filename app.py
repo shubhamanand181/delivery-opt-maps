@@ -245,18 +245,7 @@ if uploaded_file:
         st.write("Summary of Clusters:")
         st.table(summary_df)
 
-        def generate_excel(vehicle_routes, summary_df):
-            file_path = '/mnt/data/optimized_routes.xlsx'
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                for vehicle, routes in vehicle_routes.items():
-                    for idx, route_df in enumerate(routes):
-                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            st.write(f"[Download Excel file](optimized_routes.xlsx)")
-
-        generate_excel(vehicle_routes, summary_df)
+        
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
