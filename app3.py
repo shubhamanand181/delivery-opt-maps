@@ -18,6 +18,8 @@ if 'vehicle_assignments' not in st.session_state:
     st.session_state.vehicle_assignments = {}
 if 'delivered_shops' not in st.session_state:
     st.session_state.delivered_shops = []
+if 'summary_df' not in st.session_state:
+    st.session_state.summary_df = pd.DataFrame()
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
@@ -226,6 +228,7 @@ if uploaded_file:
                 })
 
         summary_df = pd.DataFrame(summary_data)
+        st.session_state.summary_df = summary_df  # Store in session state
         return vehicle_routes, summary_df
 
     def render_map(df, map_name):
@@ -257,8 +260,12 @@ if uploaded_file:
                         st.session_state.delivered_shops.append(shop_index)
                         st.experimental_rerun()
 
-    st.write("Summary of Clusters:")
-    st.table(summary_df)
+    if st.button("Generate Routes"):
+        render_cluster_maps(df_locations)
+
+    if not st.session_state.summary_df.empty:
+        st.write("Summary of Clusters:")
+        st.table(st.session_state.summary_df)
 
     def generate_excel(vehicle_routes, summary_df):
         file_path = 'optimized_routes.xlsx'
@@ -275,5 +282,3 @@ if uploaded_file:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-    if st.button("Generate Routes"):
-        render_cluster_maps(df_locations)
