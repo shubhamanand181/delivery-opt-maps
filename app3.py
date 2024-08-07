@@ -13,6 +13,10 @@ load_dotenv()
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 
+# Initialize session state for delivered shops if not already done
+if 'delivered_shops' not in st.session_state:
+    st.session_state.delivered_shops = []
+
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
 
@@ -110,7 +114,7 @@ if uploaded_file:
             solver.Add(A2 == 0)  # Ensure A2 is not used
 
         # Objective
-        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
+        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3)
 
         status = solver.Solve()
 
