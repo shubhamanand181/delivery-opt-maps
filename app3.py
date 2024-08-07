@@ -236,11 +236,25 @@ if uploaded_file:
         vehicle_assignments = st.session_state.vehicle_assignments
         vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
 
+        completed_deliveries = st.session_state.get('completed_deliveries', set())
+
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
-                link = render_map(route_df, route_name)
-                st.write(f"[{route_name}]({link})")
+                for i, row in route_df.iterrows():
+                    delivery_point = f"{row['Latitude']},{row['Longitude']}"
+                    if delivery_point in completed_deliveries:
+                        continue
+
+                    # Mark delivery as completed
+                    if st.checkbox(f"Mark {row['Party']} as delivered", key=f"{vehicle}_{idx}_{i}"):
+                        completed_deliveries.add(delivery_point)
+                        st.session_state.completed_deliveries = completed_deliveries
+
+                remaining_route_df = route_df[~route_df.apply(lambda row: f"{row['Latitude']},{row['Longitude']}" in completed_deliveries, axis=1)]
+                if not remaining_route_df.empty:
+                    link = render_map(remaining_route_df, route_name)
+                    st.write(f"[{route_name}]({link})")
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
@@ -264,4 +278,3 @@ if uploaded_file:
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
-
