@@ -257,25 +257,23 @@ if uploaded_file:
                         st.session_state.delivered_shops.append(shop_index)
                         st.experimental_rerun()
 
-        st.write("Summary of Clusters:")
-        st.table(summary_df)
+    st.write("Summary of Clusters:")
+    st.table(summary_df)
 
-        def generate_excel(vehicle_routes, summary_df):
-            file_path = 'optimized_routes.xlsx'
-            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                for vehicle, routes in vehicle_routes.items():
-                    for idx, route_df in enumerate(routes):
-                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            with open(file_path, "rb") as f:
-                st.download_button(
-                    label="Download Excel file",
-                    data=f,
-                    file_name="optimized_routes.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-        generate_excel(vehicle_routes, summary_df)
+    def generate_excel(vehicle_routes, summary_df):
+        file_path = 'optimized_routes.xlsx'
+        with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+            for vehicle, routes in vehicle_routes.items():
+                for idx, route_df in enumerate(routes):
+                    route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+        with open(file_path, "rb") as f:
+            st.download_button(
+                label="Download Excel file",
+                data=f,
+                file_name="optimized_routes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
