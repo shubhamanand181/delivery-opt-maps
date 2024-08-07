@@ -17,7 +17,7 @@ google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 if 'vehicle_assignments' not in st.session_state:
     st.session_state.vehicle_assignments = {}
 if 'delivered_shops' not in st.session_state:
-    st.session_state.delivered_shops = []
+    st.session_state.delivered_shops = {}
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
