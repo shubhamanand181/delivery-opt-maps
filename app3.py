@@ -20,6 +20,8 @@ if 'delivered_shops' not in st.session_state:
     st.session_state.delivered_shops = []
 if 'summary_df' not in st.session_state:
     st.session_state.summary_df = pd.DataFrame()
+if 'vehicle_routes' not in st.session_state:
+    st.session_state.vehicle_routes = {}
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
@@ -228,6 +230,7 @@ if uploaded_file:
                 })
 
         summary_df = pd.DataFrame(summary_data)
+        st.session_state.vehicle_routes = vehicle_routes  # Store vehicle routes in session state
         st.session_state.summary_df = summary_df  # Store in session state
         return vehicle_routes, summary_df
 
@@ -281,4 +284,3 @@ if uploaded_file:
                 file_name="optimized_routes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
