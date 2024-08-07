@@ -19,7 +19,7 @@ st.title("Delivery Optimization App with Google Maps Integration")
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
     df_locations = pd.read_excel(uploaded_file)  # Ensure openpyxl is in requirements.txt
-    
+
     # Display the column names to verify
     st.write("Column Names:", df_locations.columns)
 
@@ -110,7 +110,7 @@ if uploaded_file:
             solver.Add(A2 == 0)  # Ensure A2 is not used
 
         # Objective
-        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
+        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3)
 
         status = solver.Solve()
 
@@ -236,25 +236,16 @@ if uploaded_file:
         vehicle_assignments = st.session_state.vehicle_assignments
         vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
 
-        completed_deliveries = st.session_state.get('completed_deliveries', set())
-
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
-                for i, row in route_df.iterrows():
-                    delivery_point = f"{row['Latitude']},{row['Longitude']}"
-                    if delivery_point in completed_deliveries:
-                        continue
+                link = render_map(route_df, route_name)
+                st.write(f"[{route_name}]({link})")
 
-                    # Mark delivery as completed
-                    if st.checkbox(f"Mark {row['Party']} as delivered", key=f"{vehicle}_{idx}_{i}"):
-                        completed_deliveries.add(delivery_point)
-                        st.session_state.completed_deliveries = completed_deliveries
-
-                remaining_route_df = route_df[~route_df.apply(lambda row: f"{row['Latitude']},{row['Longitude']}" in completed_deliveries, axis=1)]
-                if not remaining_route_df.empty:
-                    link = render_map(remaining_route_df, route_name)
-                    st.write(f"[{route_name}]({link})")
+                if st.button(f"Mark Delivered for {route_name}"):
+                    route_df = route_df.drop(route_df.index[0])
+                    st.session_state.vehicle_assignments[vehicle] = route_df.index.tolist()
+                    render_cluster_maps(df_locations)
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
@@ -278,3 +269,4 @@ if uploaded_file:
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
+
