@@ -19,7 +19,7 @@ st.title("Delivery Optimization App with Google Maps Integration")
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
     df_locations = pd.read_excel(uploaded_file)  # Ensure openpyxl is in requirements.txt
-
+    
     # Display the column names to verify
     st.write("Column Names:", df_locations.columns)
 
@@ -110,7 +110,7 @@ if uploaded_file:
             solver.Add(A2 == 0)  # Ensure A2 is not used
 
         # Objective
-        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3)
+        solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
 
         status = solver.Solve()
 
@@ -242,10 +242,18 @@ if uploaded_file:
                 link = render_map(route_df, route_name)
                 st.write(f"[{route_name}]({link})")
 
-                if st.button(f"Mark Delivered for {route_name}"):
-                    route_df = route_df.drop(route_df.index[0])
-                    st.session_state.vehicle_assignments[vehicle] = route_df.index.tolist()
-                    render_cluster_maps(df_locations)
+                if 'delivered_shops' not in st.session_state:
+                    st.session_state.delivered_shops = []
+
+                # Filter out delivered shops
+                route_df = route_df[~route_df.index.isin(st.session_state.delivered_shops)]
+                
+                for shop_index in route_df.index:
+                    shop_name = df_locations.loc[shop_index, 'Party']
+                    if st.button(f"Mark Delivered for {shop_name}"):
+                        st.session_state.delivered_shops.append(shop_index)
+                        route_df = route_df.drop(shop_index)
+                        st.experimental_rerun()
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
@@ -269,4 +277,3 @@ if uploaded_file:
 
     if st.button("Generate Routes"):
         render_cluster_maps(df_locations)
-
