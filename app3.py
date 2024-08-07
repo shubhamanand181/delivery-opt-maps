@@ -23,6 +23,10 @@ if 'summary_df' not in st.session_state:
 if 'vehicle_routes' not in st.session_state:
     st.session_state.vehicle_routes = {}
 
+# Display session state for debugging
+st.write("Session State Debug Info:")
+st.write(st.session_state)
+
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
 
@@ -246,7 +250,15 @@ if uploaded_file:
             return
 
         vehicle_assignments = st.session_state.vehicle_assignments
-        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
+
+        # Only generate routes if not already in session state
+        if 'vehicle_routes' not in st.session_state or not st.session_state.vehicle_routes:
+            vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
+            st.session_state.vehicle_routes = vehicle_routes
+            st.session_state.summary_df = summary_df
+        else:
+            vehicle_routes = st.session_state.vehicle_routes
+            summary_df = st.session_state.summary_df
 
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
@@ -263,24 +275,25 @@ if uploaded_file:
                         st.session_state.delivered_shops.append(shop_index)
                         st.experimental_rerun()
 
-    if st.button("Generate Routes"):
-        render_cluster_maps(df_locations)
+if st.button("Generate Routes"):
+    render_cluster_maps(df_locations)
 
-    if not st.session_state.summary_df.empty:
-        st.write("Summary of Clusters:")
-        st.table(st.session_state.summary_df)
+# Display Summary of Clusters
+if not st.session_state.summary_df.empty:
+    st.write("Summary of Clusters:")
+    st.table(st.session_state.summary_df)
 
-    def generate_excel(vehicle_routes, summary_df):
-        file_path = 'optimized_routes.xlsx'
-        with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-            for vehicle, routes in vehicle_routes.items():
-                for idx, route_df in enumerate(routes):
-                    route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
-        with open(file_path, "rb") as f:
-            st.download_button(
-                label="Download Excel file",
-                data=f,
-                file_name="optimized_routes.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+def generate_excel(vehicle_routes, summary_df):
+    file_path = 'optimized_routes.xlsx'
+    with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+        for vehicle, routes in vehicle_routes.items():
+            for idx, route_df in enumerate(routes):
+                route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
+        summary_df.to_excel(writer, sheet_name='Summary', index=False)
+    with open(file_path, "rb") as f:
+        st.download_button(
+            label="Download Excel file",
+            data=f,
+            file_name="optimized_routes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
