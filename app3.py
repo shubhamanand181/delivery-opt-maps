@@ -13,20 +13,6 @@ load_dotenv()
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 
-# Initialize session state
-if 'vehicle_assignments' not in st.session_state:
-    st.session_state.vehicle_assignments = {}
-if 'delivered_shops' not in st.session_state:
-    st.session_state.delivered_shops = []
-if 'summary_df' not in st.session_state:
-    st.session_state.summary_df = pd.DataFrame()
-if 'vehicle_routes' not in st.session_state:
-    st.session_state.vehicle_routes = {}
-
-# Display session state for debugging
-st.write("Session State Debug Info:")
-st.write(st.session_state)
-
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
 
