@@ -17,7 +17,7 @@ google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 if 'vehicle_assignments' not in st.session_state:
     st.session_state.vehicle_assignments = {}
 if 'delivered_shops' not in st.session_state:
-    st.session_state.delivered_shops = {}
+    st.session_state.delivered_shops = []
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
@@ -25,7 +25,7 @@ st.title("Delivery Optimization App with Google Maps Integration")
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
     df_locations = pd.read_excel(uploaded_file)  # Ensure openpyxl is in requirements.txt
-
+    
     # Display the column names to verify
     st.write("Column Names:", df_locations.columns)
 
