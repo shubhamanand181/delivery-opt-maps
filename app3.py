@@ -23,6 +23,9 @@ if 'vehicle_routes' not in st.session_state:
 if 'summary_df' not in st.session_state:
     st.session_state.summary_df = pd.DataFrame()
 
+if 'vehicle_assignments' not in st.session_state:
+    st.session_state.vehicle_assignments = {}
+
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
 
