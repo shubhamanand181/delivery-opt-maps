@@ -10,54 +10,78 @@ load_dotenv()
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 
-# Upload and read Excel file
-st.title("Google Maps with Custom Markers")
+# Initialize session state for delivered shops
+if 'delivered_shops' not in st.session_state:
+    st.session_state.delivered_shops = []
+
+# Function to create the HTML code for Google Maps with custom markers and navigation links
+def create_map_html(df, api_key, delivered_shops):
+    markers = []
+    for index, row in df.iterrows():
+        if row['Party'] not in delivered_shops:
+            markers.append(f"""
+                var marker = new google.maps.Marker({{
+                    position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
+                    map: map,
+                    title: '{row['Party']}'
+                }});
+                var infoWindow = new google.maps.InfoWindow({{
+                    content: '<b>{row['Party']}</b><br>Lat: {row['Latitude']}<br>Lng: {row['Longitude']}<br><a href="https://www.google.com/maps/dir/?api=1&destination={row['Latitude']},{row['Longitude']}" target="_blank">Navigate</a>'
+                }});
+                marker.addListener('click', function() {{
+                    infoWindow.open(map, marker);
+                }});
+            """)
+    markers_js = "\n".join(markers)
+    
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Simple Map</title>
+        <script src="https://maps.googleapis.com/maps/api/js?key={api_key}&callback=initMap" async defer></script>
+        <script>
+          function initMap() {{
+            var map = new google.maps.Map(document.getElementById('map'), {{
+              center: {{lat: {df['Latitude'].mean()}, lng: {df['Longitude'].mean()}}},
+              zoom: 12
+            }});
+            {markers_js}
+          }}
+        </script>
+      </head>
+      <body>
+        <div id="map" style="height: 500px; width: 100%;"></div>
+      </body>
+    </html>
+    """
+    return html_code
+
+# Streamlit UI
+st.title("Delivery Optimization App with Google Maps Integration")
 
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
     df_locations = pd.read_excel(uploaded_file)
-    st.write("Column Names:", df_locations.columns)
+    
+    # Ensure the dataframe has the required columns
+    if 'Party' in df_locations.columns and 'Latitude' in df_locations.columns and 'Longitude' in df_locations.columns:
+        # Display the proof of delivery form
+        st.subheader("Proof of Delivery Form")
+        selected_shop = st.selectbox("Select Shop", df_locations['Party'])
+        payment_made = st.number_input("Payment Made", min_value=0.0, format="%.2f")
+        previous_due = st.number_input("Previous Due", min_value=0.0, format="%.2f")
+        updated_balance = st.number_input("Updated Balance", min_value=0.0, format="%.2f")
+        return_note = st.text_area("Return Note")
 
-    expected_columns = ['Party', 'Latitude', 'Longitude']
-    if all(col in df_locations.columns for col in expected_columns):
-        st.write("All expected columns are present.")
+        if st.button("Submit Delivery"):
+            st.session_state.delivered_shops.append(selected_shop)
+            st.success(f"Delivery details for {selected_shop} saved successfully!")
+
+        # Generate the HTML for the map
+        html_code = create_map_html(df_locations, google_maps_api_key, st.session_state.delivered_shops)
+        
+        # Display the map in Streamlit
+        components.html(html_code, height=600)
     else:
-        st.write("One or more expected columns are missing. Please check the column names in the Excel file.")
-        st.stop()
-
-    df_locations.dropna(subset=['Latitude', 'Longitude'], inplace=True)
-
-    def generate_custom_map(df):
-        markers = []
-        for _, row in df.iterrows():
-            marker = f'''
-            new google.maps.Marker({{
-                position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
-                map: map,
-                title: "{row['Party']}"
-            }});
-            '''
-            markers.append(marker)
-        return f'''
-        <html>
-        <head>
-        <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
-        <script>
-        function initMap() {{
-            var map = new google.maps.Map(document.getElementById('map'), {{
-                zoom: 10,
-                center: {{lat: {df['Latitude'].mean()}, lng: {df['Longitude'].mean()}}}
-            }});
-
-            {''.join(markers)}
-        }}
-        </script>
-        </head>
-        <body>
-        <div id="map" style="height: 500px; width: 100%;"></div>
-        </body>
-        </html>
-        '''
-
-    custom_map_html = generate_custom_map(df_locations)
-    components.html(custom_map_html, height=600)
+        st.error("The uploaded file does not have the required columns: 'Party', 'Latitude', 'Longitude'")
