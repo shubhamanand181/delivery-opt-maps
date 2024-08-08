@@ -1,8 +1,8 @@
-import streamlit as st
-import streamlit.components.v1 as components
+import os
 import pandas as pd
 from dotenv import load_dotenv
-import os
+import streamlit as st
+import streamlit.components.v1 as components
 
 # Load .env file
 load_dotenv()
@@ -10,28 +10,23 @@ load_dotenv()
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 
-# Initialize session state for delivered shops
-if 'delivered_shops' not in st.session_state:
-    st.session_state.delivered_shops = []
-
-# Function to create the HTML code for Google Maps with custom markers and navigation links
-def create_map_html(df, api_key, delivered_shops):
+# Function to create the HTML code for Google Maps with custom markers
+def create_map_html(df, api_key):
     markers = []
     for index, row in df.iterrows():
-        if row['Party'] not in delivered_shops:
-            markers.append(f"""
-                var marker = new google.maps.Marker({{
-                    position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
-                    map: map,
-                    title: '{row['Party']}'
-                }});
-                var infoWindow = new google.maps.InfoWindow({{
-                    content: '<b>{row['Party']}</b><br>Lat: {row['Latitude']}<br>Lng: {row['Longitude']}<br><a href="https://www.google.com/maps/dir/?api=1&destination={row['Latitude']},{row['Longitude']}" target="_blank">Navigate</a>'
-                }});
-                marker.addListener('click', function() {{
-                    infoWindow.open(map, marker);
-                }});
-            """)
+        markers.append(f"""
+            var marker = new google.maps.Marker({{
+                position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
+                map: map,
+                title: '{row['Party']}'
+            }});
+            var infoWindow = new google.maps.InfoWindow({{
+                content: '<b>{row['Party']}</b><br>Lat: {row['Latitude']}<br>Lng: {row['Longitude']}<br><a href="https://www.google.com/maps/dir/?api=1&destination={row['Latitude']},{row['Longitude']}" target="_blank">Navigate</a>'
+            }});
+            marker.addListener('click', function() {{
+                infoWindow.open(map, marker);
+            }});
+        """)
     markers_js = "\n".join(markers)
     
     html_code = f"""
@@ -58,7 +53,7 @@ def create_map_html(df, api_key, delivered_shops):
     return html_code
 
 # Streamlit UI
-st.title("Delivery Optimization App with Google Maps Integration")
+st.title("Map with Custom Markers")
 
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
@@ -66,22 +61,13 @@ if uploaded_file:
     
     # Ensure the dataframe has the required columns
     if 'Party' in df_locations.columns and 'Latitude' in df_locations.columns and 'Longitude' in df_locations.columns:
-        # Display the proof of delivery form
-        st.subheader("Proof of Delivery Form")
-        selected_shop = st.selectbox("Select Shop", df_locations['Party'])
-        payment_made = st.number_input("Payment Made", min_value=0.0, format="%.2f")
-        previous_due = st.number_input("Previous Due", min_value=0.0, format="%.2f")
-        updated_balance = st.number_input("Updated Balance", min_value=0.0, format="%.2f")
-        return_note = st.text_area("Return Note")
-
-        if st.button("Submit Delivery"):
-            st.session_state.delivered_shops.append(selected_shop)
-            st.success(f"Delivery details for {selected_shop} saved successfully!")
-
-        # Generate the HTML for the map
-        html_code = create_map_html(df_locations, google_maps_api_key, st.session_state.delivered_shops)
+        # Clean the dataframe: Remove rows with missing or invalid coordinates
+        df_locations = df_locations.dropna(subset=['Latitude', 'Longitude'])
+        df_locations = df_locations[df_locations['Latitude'].apply(lambda x: pd.notnull(x))]
+        df_locations = df_locations[df_locations['Longitude'].apply(lambda x: pd.notnull(x))]
         
-        # Display the map in Streamlit
-        components.html(html_code, height=600)
+        st.write("Map with Custom Markers:")
+        map_html = create_map_html(df_locations, google_maps_api_key)
+        components.html(map_html, height=500)
     else:
-        st.error("The uploaded file does not have the required columns: 'Party', 'Latitude', 'Longitude'")
+        st.write("Please ensure your Excel file has the columns: 'Party', 'Latitude', 'Longitude'")
