@@ -129,62 +129,38 @@ if uploaded_file:
                     "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
                     "Deliveries assigned to V3": A3.solution_value()
                 }
-            else:
-                return {
-                    "Status": "Not Optimal",
-                    "Result": {
-                        "V1": V1.solution_value(),
-                        "V2": V2.solution_value(),
-                        "V3": V3.solution_value(),
-                        "Total Cost": solver.Objective().Value(),
-                        "Deliveries assigned to V1": C1.solution_value() + B1.solution_value() + A1.solution_value(),
-                        "Deliveries assigned to V2": B2.solution_value() + A2.solution_value(),
-                        "Deliveries assigned to V3": A3.solution_value()
-                    }
-                }
-        
-        if st.button("Optimize Load"):
-            D_a_count = len(df_locations[df_locations['Weight (KG)'] <= 2])
-            D_b_count = len(df_locations[(df_locations['Weight (KG)'] > 2) & (df_locations['Weight (KG)'] <= 10)])
-            D_c_count = len(df_locations[df_locations['Weight (KG)'] > 10])
-            result = optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity)
-            st.write("Load Optimization Results:")
-            st.write(result)
-            st.session_state.load_optimization_result = result
 
-            vehicle_assignments = {
-                "V1": df_locations[df_locations['Weight (KG)'] > 10].index.tolist(),
-                "V2": df_locations[(df_locations['Weight (KG)'] > 2) & (df_locations['Weight (KG)'] <= 10)].index.tolist(),
-                "V3": df_locations[df_locations['Weight (KG)'] <= 2].index.tolist()
+        D_a_count = len(df_locations[(df_locations['Weight (KG)'] > 0) & (df_locations['Weight (KG)'] <= 2)])
+        D_b_count = len(df_locations[(df_locations['Weight (KG)'] > 2) & (df_locations['Weight (KG)'] <= 10)])
+        D_c_count = len(df_locations[(df_locations['Weight (KG)'] > 10) & (df_locations['Weight (KG)'] <= 200)])
+
+        result = optimize_load(D_a_count, D_b_count, D_c_count, cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity)
+
+        if result:
+            st.write("Load Optimization Results:")
+            st.write(f"Status: {result['Status']}")
+            st.write(f"V1: {result['V1']}")
+            st.write(f"V2: {result['V2']}")
+            st.write(f"V3: {result['V3']}")
+            st.write(f"Total Cost: {result['Total Cost']}")
+            st.write(f"Deliveries assigned to V1: {result['Deliveries assigned to V1']}")
+            st.write(f"Deliveries assigned to V2: {result['Deliveries assigned to V2']}")
+            st.write(f"Deliveries assigned to V3: {result['Deliveries assigned to V3']}")
+
+            st.session_state.vehicle_assignments = {
+                "V1": df_locations.index[:int(result['Deliveries assigned to V1'])].tolist(),
+                "V2": df_locations.index[int(result['Deliveries assigned to V1']):int(result['Deliveries assigned to V1'] + result['Deliveries assigned to V2'])].tolist(),
+                "V3": df_locations.index[int(result['Deliveries assigned to V1'] + result['Deliveries assigned to V2']):].tolist()
             }
 
-            st.session_state.vehicle_assignments = vehicle_assignments
-            st.write("Vehicle Assignments:", vehicle_assignments)
-        
-        # Generate the HTML for the map
-        html_code = create_map_html(df_locations, google_maps_api_key, st.session_state.delivered_shops)
-        
-        # Display the map in Streamlit
-        components.html(html_code, height=600)
+        def calculate_distance_matrix(df):
+            distance_matrix = np.zeros((len(df), len(df)))
+            for i, (lat1, lon1) in enumerate(zip(df['Latitude'], df['Longitude'])):
+                for j, (lat2, lon2) in enumerate(zip(df['Latitude'], df['Longitude'])):
+                    if i != j:
+                        distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
+            return distance_matrix
 
-        # Proof of Delivery Form
-        st.subheader("Proof of Delivery Form")
-        selected_shop = st.selectbox("Select Shop", df_locations['Party'])
-        payment_made = st.number_input("Payment Made", min_value=0.0, format="%.2f")
-        previous_due = st.number_input("Previous Due", min_value=0.0, format="%.2f")
-        updated_balance = st.number_input("Updated Balance", min_value=0.0, format="%.2f")
-        return_note = st.text_area("Return Note")
-
-        if st.button("Submit Delivery"):
-            st.session_state.delivered_shops.append(selected_shop)
-            st.success(f"Delivery details for {selected_shop} recorded.")
-            st.write("Delivery Details:")
-            st.write(f"Payment Made: {payment_made}")
-            st.write(f"Previous Due: {previous_due}")
-            st.write(f"Updated Balance: {updated_balance}")
-            st.write(f"Return Note: {return_note}")
-        
-        # Function to generate routes and summary
         def generate_routes(vehicle_assignments, df_locations):
             vehicle_routes = {}
             summary_data = []
@@ -196,12 +172,11 @@ if uploaded_file:
                     st.write(f"No assignments for {vehicle}")
                     continue
 
-                distance_matrix = np.zeros((len(df_vehicle), len(df_vehicle)))
-                for i, (lat1, lon1) in enumerate(zip(df_vehicle['Latitude'], df_vehicle['Longitude'])):
-                    for j, (lat2, lon2) in enumerate(zip(df_vehicle['Latitude'], df_vehicle['Longitude'])):
-                        if i != j:
-                            distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
-                
+                distance_matrix = calculate_distance_matrix(df_vehicle)
+                if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
+                    st.write(f"Invalid values in distance matrix for {vehicle}")
+                    continue
+
                 db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
                 db.fit(distance_matrix)
 
@@ -246,7 +221,7 @@ if uploaded_file:
             for vehicle, routes in vehicle_routes.items():
                 for idx, route_df in enumerate(routes):
                     route_name = f"{vehicle} Cluster {idx}"
-                    link = f"https://www.google.com/maps/dir/?api=1&origin={route_df.iloc[0]['Latitude']},{route_df.iloc[0]['Longitude']}&destination={route_df.iloc[-1]['Latitude']},{route_df.iloc[-1]['Longitude']}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(route_df['Latitude'], route_df['Longitude']))
+                    link = render_map(route_df, route_name)
                     st.write(f"[{route_name}]({link})")
 
             st.write("Summary of Clusters:")
@@ -271,9 +246,10 @@ if uploaded_file:
 
         if st.button("Generate Routes"):
             render_cluster_maps(df_locations)
-        
+
         if st.button("Update Routes"):
             render_cluster_maps(df_locations)
-    else:
-        st.error("The uploaded file does not have the required columns: 'Party', 'Latitude', 'Longitude'")
 
+        st.write("Map with Custom Markers:")
+        map_html = create_map_html(df_locations, google_maps_api_key, st.session_state.delivered_shops)
+        components.html(map_html, height=500)
