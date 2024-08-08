@@ -97,8 +97,8 @@ if uploaded_file:
             solver.Add(B2 == D_b_count - B1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A2 <= v2_capacity * V2 - B2)
-            solver.Add(V3 == 0)
-            solver.Add(A3 == 0)
+            solver.Add(V3 == 0)  
+            solver.Add(A3 == 0)  
         elif scenario == "Scenario 3: V1, V3":
             solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
             solver.Add(v3_capacity * V3 >= A3)
@@ -106,9 +106,9 @@ if uploaded_file:
             solver.Add(B1 <= v1_capacity * V1 - C1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A3 == D_a_count - A1)
-            solver.Add(V2 == 0)
-            solver.Add(B2 == 0)
-            solver.Add(A2 == 0)
+            solver.Add(V2 == 0)  
+            solver.Add(B2 == 0)  
+            solver.Add(A2 == 0)  
 
         # Objective
         solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
