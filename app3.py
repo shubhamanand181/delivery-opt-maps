@@ -70,6 +70,11 @@ if uploaded_file:
     
     # Ensure the dataframe has the required columns
     if 'Party' in df_locations.columns and 'Latitude' in df_locations.columns and 'Longitude' in df_locations.columns:
+        # Clean the dataframe: Remove rows with missing or invalid coordinates
+        df_locations = df_locations.dropna(subset=['Latitude', 'Longitude'])
+        df_locations = df_locations[df_locations['Latitude'].apply(lambda x: np.isfinite(x))]
+        df_locations = df_locations[df_locations['Longitude'].apply(lambda x: np.isfinite(x))]
+
         # Load optimization
         st.subheader("Load Optimization")
         cost_v1 = st.number_input("Enter cost for V1:", value=62.8156)
@@ -172,9 +177,14 @@ if uploaded_file:
 
         if st.button("Submit Delivery"):
             st.session_state.delivered_shops.append(selected_shop)
-            st.success(f"Delivery details for {selected_shop} saved successfully!")
-
-        # Function to generate cluster-specific maps
+            st.success(f"Delivery details for {selected_shop} recorded.")
+            st.write("Delivery Details:")
+            st.write(f"Payment Made: {payment_made}")
+            st.write(f"Previous Due: {previous_due}")
+            st.write(f"Updated Balance: {updated_balance}")
+            st.write(f"Return Note: {return_note}")
+        
+        # Function to generate routes and summary
         def generate_routes(vehicle_assignments, df_locations):
             vehicle_routes = {}
             summary_data = []
@@ -266,3 +276,4 @@ if uploaded_file:
             render_cluster_maps(df_locations)
     else:
         st.error("The uploaded file does not have the required columns: 'Party', 'Latitude', 'Longitude'")
+
