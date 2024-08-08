@@ -277,6 +277,9 @@ if uploaded_file:
     if st.button("Generate Routes", key='generate_routes'):
         render_cluster_maps(df_locations)
 
+    if st.button("Update Routes", key='update_routes'):
+        render_cluster_maps(df_locations)
+
     # Display Summary of Clusters
     if not st.session_state.summary_df.empty:
         st.write("Summary of Clusters:")
@@ -299,8 +302,8 @@ def generate_excel(vehicle_routes, summary_df):
 
 # Ensure this code is within the main block
 if __name__ == '__main__':
-    if st.button("Generate Routes", key='generate_routes_main'):
-        render_cluster_maps(df_locations)
+    st.button("Generate Routes", key='generate_routes_main')
+    st.button("Update Routes", key='update_routes_main')
 
     # Display Summary of Clusters
     if not st.session_state.summary_df.empty:
