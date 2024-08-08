@@ -6,7 +6,7 @@ from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
-import gmplot
+import streamlit.components.v1 as components
 
 # Load .env file
 load_dotenv()
@@ -19,7 +19,7 @@ st.title("Delivery Optimization App with Google Maps Integration")
 
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
-    df_locations = pd.read_excel(uploaded_file)
+    df_locations = pd.read_excel(uploaded_file)  # Ensure openpyxl is in requirements.txt
     
     # Display the column names to verify
     st.write("Column Names:", df_locations.columns)
@@ -97,8 +97,8 @@ if uploaded_file:
             solver.Add(B2 == D_b_count - B1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A2 <= v2_capacity * V2 - B2)
-            solver.Add(V3 == 0)  
-            solver.Add(A3 == 0)  
+            solver.Add(V3 == 0)  # Ensure V3 is not used
+            solver.Add(A3 == 0)  # Ensure A3 is not used
         elif scenario == "Scenario 3: V1, V3":
             solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
             solver.Add(v3_capacity * V3 >= A3)
@@ -106,9 +106,9 @@ if uploaded_file:
             solver.Add(B1 <= v1_capacity * V1 - C1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A3 == D_a_count - A1)
-            solver.Add(V2 == 0)  
-            solver.Add(B2 == 0)  
-            solver.Add(A2 == 0)  
+            solver.Add(V2 == 0)  # Ensure V2 is not used
+            solver.Add(B2 == 0)  # Ensure B2 is not used
+            solver.Add(A2 == 0)  # Ensure A2 is not used
 
         # Objective
         solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
@@ -224,18 +224,45 @@ if uploaded_file:
         return vehicle_routes, summary_df
 
     def render_map(df, map_name):
-        latitudes = df['Latitude'].tolist()
-        longitudes = df['Longitude'].tolist()
-        labels = df['Party'].tolist()
+        markers = []
+        for index, row in df.iterrows():
+            markers.append(f"""
+                var marker = new google.maps.Marker({{
+                    position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
+                    map: map,
+                    title: '{row['Party']}'
+                }});
+                var infoWindow = new google.maps.InfoWindow({{
+                    content: '<b>{row['Party']}</b><br>Lat: {row['Latitude']}<br>Lng: {row['Longitude']}<br><a href="https://www.google.com/maps/dir/?api=1&destination={row['Latitude']},{row['Longitude']}" target="_blank">Navigate</a>'
+                }});
+                marker.addListener('click', function() {{
+                    infoWindow.open(map, marker);
+                }});
+            """)
+        markers_js = "\n".join(markers)
 
-        map_url = f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
-
-        gmap = gmplot.GoogleMapPlotter(latitudes[0], longitudes[0], 13, apikey=google_maps_api_key)
-        for lat, lon, label in zip(latitudes, longitudes, labels):
-            gmap.marker(lat, lon, title=label)
-        
-        gmap.draw(f"{map_name}.html")
-        return map_url
+        html_code = f"""
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Map - {map_name}</title>
+            <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
+            <script>
+              function initMap() {{
+                var map = new google.maps.Map(document.getElementById('map'), {{
+                  center: {{lat: {df['Latitude'].mean()}, lng: {df['Longitude'].mean()}}},
+                  zoom: 12
+                }});
+                {markers_js}
+              }}
+            </script>
+          </head>
+          <body>
+            <div id="map" style="height: 500px; width: 100%;"></div>
+          </body>
+        </html>
+        """
+        return html_code
 
     def render_cluster_maps(df_locations):
         if 'vehicle_assignments' not in st.session_state:
@@ -272,7 +299,4 @@ if uploaded_file:
         generate_excel(vehicle_routes, summary_df)
 
     if st.button("Generate Routes"):
-        render_cluster_maps(df_locations)
-
-    if st.button("Update Routes"):
         render_cluster_maps(df_locations)
