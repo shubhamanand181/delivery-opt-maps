@@ -183,7 +183,7 @@ if uploaded_file:
 
                 distance_matrix = calculate_distance_matrix(df_vehicle)
                 if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
-                    st.write(f"Invalid values in distance_matrix for {vehicle}")
+                    st.write(f"Invalid values in distance matrix for {vehicle}")
                     continue
 
                 db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
@@ -262,3 +262,5 @@ if uploaded_file:
         st.write("Map with Custom Markers:")
         map_html = create_map_html(df_locations, google_maps_api_key, st.session_state.delivered_shops)
         components.html(map_html, height=500)
+    else:
+        st.write("Please ensure your Excel file has the columns: 'Party', 'Latitude', 'Longitude'")
