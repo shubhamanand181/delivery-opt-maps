@@ -215,7 +215,17 @@ if uploaded_file:
         return vehicle_routes, summary_df
 
     def generate_custom_map(df):
-        map_html = f'''
+        markers = []
+        for _, row in df.iterrows():
+            marker = f'''
+            new google.maps.Marker({{
+                position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
+                map: map,
+                title: "{row['Party']}"
+            }});
+            '''
+            markers.append(marker)
+        return f'''
         <html>
         <head>
         <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
@@ -226,21 +236,7 @@ if uploaded_file:
                 center: {{lat: {df['Latitude'].mean()}, lng: {df['Longitude'].mean()}}}
             }});
 
-            var markers = {df.to_json(orient='records')};
-
-            markers.forEach(function(marker) {{
-                var infowindow = new google.maps.InfoWindow({{
-                    content: marker['Party']
-                }});
-                var marker = new google.maps.Marker({{
-                    position: {{lat: marker['Latitude'], lng: marker['Longitude']}},
-                    map: map,
-                    title: marker['Party']
-                }});
-                marker.addListener('click', function() {{
-                    infowindow.open(map, marker);
-                }});
-            }});
+            {''.join(markers)}
         }}
         </script>
         </head>
@@ -249,7 +245,6 @@ if uploaded_file:
         </body>
         </html>
         '''
-        return map_html
 
     def render_cluster_maps_with_custom_markers(df_locations):
         if 'vehicle_assignments' not in st.session_state:
