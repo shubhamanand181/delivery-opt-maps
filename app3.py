@@ -7,7 +7,6 @@ from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
 import streamlit.components.v1 as components
-import urllib.parse
 
 # Load .env file
 load_dotenv()
@@ -175,99 +174,41 @@ if uploaded_file:
                     distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
         return distance_matrix
 
-    def generate_routes(vehicle_assignments, df_locations):
-        vehicle_routes = {}
-        summary_data = []
-
-        for vehicle, assignments in vehicle_assignments.items():
-            df_vehicle = df_locations.loc[assignments]
-
-            if df_vehicle.empty:
-                st.write(f"No assignments for {vehicle}")
-                continue
-
-            distance_matrix = calculate_distance_matrix(df_vehicle)
-            if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
-                st.write(f"Invalid values in distance matrix for {vehicle}")
-                continue
-
-            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
-            db.fit(distance_matrix)
-
-            labels = db.labels_
-            df_vehicle['Cluster'] = labels
-
-            for cluster in set(labels):
-                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
-                if cluster_df.empty:
-                    continue
-                centroid = cluster_df[['Latitude', 'Longitude']].mean().values
-                total_distance = cluster_df.apply(lambda row: great_circle(centroid, (row['Latitude'], row['Longitude'])).kilometers, axis=1).sum()
-
-                route_name = f"{vehicle} Cluster {cluster}"
-                route_df = cluster_df.copy()
-                route_df['Distance'] = total_distance
-
-                if vehicle not in vehicle_routes:
-                    vehicle_routes[vehicle] = []
-
-                vehicle_routes[vehicle].append(route_df)
-                summary_data.append({
-                    'Vehicle': vehicle,
-                    'Cluster': cluster,
-                    'Centroid Latitude': centroid[0],
-                    'Centroid Longitude': centroid[1],
-                    'Number of Shops': len(cluster_df),
-                    'Total Distance': total_distance
-                })
-
-        summary_df = pd.DataFrame(summary_data)
-        return vehicle_routes, summary_df
-
-    def generate_custom_map(df, map_name):
-        latitudes = df['Latitude'].tolist()
-        longitudes = df['Longitude'].tolist()
-        names = df['Party'].tolist()
-
-        map_html = f"""
+    def generate_custom_map(df):
+        map_html = f'''
         <html>
         <head>
-            <style>
-                #map {{
-                    height: 100%;
-                    width: 100%;
-                }}
-            </style>
-            <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
-            <script>
-                function initMap() {{
-                    var map = new google.maps.Map(document.getElementById('map'), {{
-                        zoom: 12,
-                        center: {{lat: {latitudes[0]}, lng: {longitudes[0]}}}
-                    }});
-                    var infowindow = new google.maps.InfoWindow();
-                    var markers = [
-                        {','.join([f'{{lat: {lat}, lng: {lon}, name: "{name}"}}' for lat, lon, name in zip(latitudes, longitudes, names)])}
-                    ];
-                    markers.forEach(function(marker) {{
-                        var markerObj = new google.maps.Marker({{
-                            position: new google.maps.LatLng(marker.lat, marker.lng),
-                            map: map,
-                            title: marker.name
-                        }});
-                        google.maps.event.addListener(markerObj, 'click', function() {{
-                            infowindow.setContent(marker.name);
-                            infowindow.open(map, markerObj);
-                        }});
-                    }});
-                }}
-            </script>
+        <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
+        <script>
+        function initMap() {{
+            var map = new google.maps.Map(document.getElementById('map'), {{
+                zoom: 10,
+                center: {{lat: {df['Latitude'].mean()}, lng: {df['Longitude'].mean()}}}
+            }});
+
+            var markers = {df.to_json(orient='records')};
+
+            markers.forEach(function(marker) {{
+                var infowindow = new google.maps.InfoWindow({{
+                    content: marker['Party']
+                }});
+                var marker = new google.maps.Marker({{
+                    position: {{lat: marker['Latitude'], lng: marker['Longitude']}},
+                    map: map,
+                    title: marker['Party']
+                }});
+                marker.addListener('click', function() {{
+                    infowindow.open(map, marker);
+                }});
+            }});
+        }}
+        </script>
         </head>
         <body>
-            <div id="map"></div>
+        <div id="map" style="height: 500px; width: 100%;"></div>
         </body>
         </html>
-        """
+        '''
         return map_html
 
     def render_cluster_maps_with_custom_markers(df_locations):
@@ -281,8 +222,8 @@ if uploaded_file:
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
-                map_html = generate_custom_map(route_df, route_name)
-                components.html(map_html, height=600)
+                custom_map_html = generate_custom_map(route_df)
+                components.html(custom_map_html, height=600)
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
