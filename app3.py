@@ -6,6 +6,7 @@ from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
+import streamlit.components.v1 as components
 import urllib.parse
 
 # Load .env file
@@ -223,15 +224,53 @@ if uploaded_file:
         summary_df = pd.DataFrame(summary_data)
         return vehicle_routes, summary_df
 
-    def render_map(df, map_name):
+    def generate_custom_map(df, map_name):
         latitudes = df['Latitude'].tolist()
         longitudes = df['Longitude'].tolist()
         names = df['Party'].tolist()
 
-        markers = '|'.join(f"{lat},{lon}%7C{urllib.parse.quote_plus(name)}" for lat, lon, name in zip(latitudes, longitudes, names))
-        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints={markers}"
+        map_html = f"""
+        <html>
+        <head>
+            <style>
+                #map {{
+                    height: 100%;
+                    width: 100%;
+                }}
+            </style>
+            <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
+            <script>
+                function initMap() {{
+                    var map = new google.maps.Map(document.getElementById('map'), {{
+                        zoom: 12,
+                        center: {{lat: {latitudes[0]}, lng: {longitudes[0]}}}
+                    }});
+                    var infowindow = new google.maps.InfoWindow();
+                    var markers = [
+                        {','.join([f'{{lat: {lat}, lng: {lon}, name: "{name}"}}' for lat, lon, name in zip(latitudes, longitudes, names)])}
+                    ];
+                    markers.forEach(function(marker) {{
+                        var markerObj = new google.maps.Marker({{
+                            position: new google.maps.LatLng(marker.lat, marker.lng),
+                            map: map,
+                            title: marker.name
+                        }});
+                        google.maps.event.addListener(markerObj, 'click', function() {{
+                            infowindow.setContent(marker.name);
+                            infowindow.open(map, markerObj);
+                        }});
+                    }});
+                }}
+            </script>
+        </head>
+        <body>
+            <div id="map"></div>
+        </body>
+        </html>
+        """
+        return map_html
 
-    def render_cluster_maps(df_locations):
+    def render_cluster_maps_with_custom_markers(df_locations):
         if 'vehicle_assignments' not in st.session_state:
             st.write("Please optimize the load first.")
             return
@@ -242,8 +281,8 @@ if uploaded_file:
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
-                link = render_map(route_df, route_name)
-                st.write(f"[{route_name}]({link})")
+                map_html = generate_custom_map(route_df, route_name)
+                components.html(map_html, height=600)
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
@@ -266,8 +305,4 @@ if uploaded_file:
         generate_excel(vehicle_routes, summary_df)
 
     if st.button("Generate Routes"):
-        render_cluster_maps(df_locations)
-
-    # The update routes button to modify the routes after marking a shop
-    if st.button("Update Routes"):
-        render_cluster_maps(df_locations)
+        render_cluster_maps_with_custom_markers(df_locations)
