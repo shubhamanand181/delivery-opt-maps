@@ -152,7 +152,7 @@ if uploaded_file:
                 }
             }
 
-    if st.button("Optimize Load"):
+    if st.button("Optimize Load", key='optimize_load'):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
         st.write("Load Optimization Results:")
         st.write(f"Status: {result['Status']}")
@@ -274,7 +274,7 @@ if uploaded_file:
                         st.session_state.delivered_shops.append(shop_index)
                         st.experimental_rerun()
 
-if st.button("Generate Routes"):
+if st.button("Generate Routes", key='generate_routes'):
     render_cluster_maps(df_locations)
 
 # Display Summary of Clusters
@@ -299,7 +299,7 @@ def generate_excel(vehicle_routes, summary_df):
 
 # Ensure this code is within the main block
 if __name__ == '__main__':
-    if st.button("Generate Routes"):
+    if st.button("Generate Routes", key='generate_routes_main'):
         render_cluster_maps(df_locations)
 
     # Display Summary of Clusters
