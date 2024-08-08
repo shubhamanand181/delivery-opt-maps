@@ -6,25 +6,13 @@ from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
+import urllib.parse
 
 # Load .env file
 load_dotenv()
 
 # Get the Google Maps API key
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-
-# Initialize session state variables
-if 'delivered_shops' not in st.session_state:
-    st.session_state.delivered_shops = []
-
-if 'vehicle_routes' not in st.session_state:
-    st.session_state.vehicle_routes = {}
-
-if 'summary_df' not in st.session_state:
-    st.session_state.summary_df = pd.DataFrame()
-
-if 'vehicle_assignments' not in st.session_state:
-    st.session_state.vehicle_assignments = {}
 
 # Upload and read Excel file
 st.title("Delivery Optimization App with Google Maps Integration")
@@ -233,15 +221,15 @@ if uploaded_file:
                 })
 
         summary_df = pd.DataFrame(summary_data)
-        st.session_state.vehicle_routes = vehicle_routes  # Store vehicle routes in session state
-        st.session_state.summary_df = summary_df  # Store in session state
         return vehicle_routes, summary_df
 
     def render_map(df, map_name):
         latitudes = df['Latitude'].tolist()
         longitudes = df['Longitude'].tolist()
+        names = df['Party'].tolist()
 
-        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
+        markers = '|'.join(f"{lat},{lon}%7Clabel:{urllib.parse.quote(name)}" for lat, lon, name in zip(latitudes, longitudes, names))
+        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + markers
 
     def render_cluster_maps(df_locations):
         if 'vehicle_assignments' not in st.session_state:
@@ -249,15 +237,7 @@ if uploaded_file:
             return
 
         vehicle_assignments = st.session_state.vehicle_assignments
-
-        # Only generate routes if not already in session state
-        if 'vehicle_routes' not in st.session_state or not st.session_state.vehicle_routes:
-            vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
-            st.session_state.vehicle_routes = vehicle_routes
-            st.session_state.summary_df = summary_df
-        else:
-            vehicle_routes = st.session_state.vehicle_routes
-            summary_df = st.session_state.summary_df
+        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
 
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
@@ -265,47 +245,25 @@ if uploaded_file:
                 link = render_map(route_df, route_name)
                 st.write(f"[{route_name}]({link})")
 
-                # Filter out delivered shops
-                route_df = route_df[~route_df.index.isin(st.session_state.delivered_shops)]
-                
-                for shop_index in route_df.index:
-                    shop_name = df_locations.loc[shop_index, 'Party']
-                    if st.button(f"Mark Delivered for {shop_name}", key=f"{vehicle}_{idx}_{shop_index}"):
-                        st.session_state.delivered_shops.append(shop_index)
-                        st.experimental_rerun()
-
-    if st.button("Generate Routes", key='generate_routes'):
-        render_cluster_maps(df_locations)
-
-    if st.button("Update Routes", key='update_routes'):
-        render_cluster_maps(df_locations)
-
-    # Display Summary of Clusters
-    if not st.session_state.summary_df.empty:
         st.write("Summary of Clusters:")
-        st.table(st.session_state.summary_df)
+        st.table(summary_df)
 
-def generate_excel(vehicle_routes, summary_df):
-    file_path = 'optimized_routes.xlsx'
-    with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-        for vehicle, routes in vehicle_routes.items():
-            for idx, route_df in enumerate(routes):
-                route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
-        summary_df.to_excel(writer, sheet_name='Summary', index=False)
-    with open(file_path, "rb") as f:
-        st.download_button(
-            label="Download Excel file",
-            data=f,
-            file_name="optimized_routes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        def generate_excel(vehicle_routes, summary_df):
+            file_path = 'optimized_routes.xlsx'
+            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+                for vehicle, routes in vehicle_routes.items():
+                    for idx, route_df in enumerate(routes):
+                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
+                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            with open(file_path, "rb") as f:
+                st.download_button(
+                    label="Download Excel file",
+                    data=f,
+                    file_name="optimized_routes.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
-# Ensure this code is within the main block
-if __name__ == '__main__':
-    st.button("Generate Routes", key='generate_routes_main')
-    st.button("Update Routes", key='update_routes_main')
+        generate_excel(vehicle_routes, summary_df)
 
-    # Display Summary of Clusters
-    if not st.session_state.summary_df.empty:
-        st.write("Summary of Clusters:")
-        st.table(st.session_state.summary_df)
+    if st.button("Generate Routes"):
+        render_cluster_maps(df_locations)
