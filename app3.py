@@ -275,8 +275,9 @@ if uploaded_file:
         for vehicle, routes in vehicle_routes.items():
             for idx, route_df in enumerate(routes):
                 route_name = f"{vehicle} Cluster {idx}"
-                link = render_map(route_df, route_name)
-                st.write(f"[{route_name}]({link})")
+                map_html = render_map(route_df, route_name)
+                st.write(f"Map for {route_name}:")
+                components.html(map_html, height=500)
 
         st.write("Summary of Clusters:")
         st.table(summary_df)
