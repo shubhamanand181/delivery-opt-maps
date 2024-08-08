@@ -61,6 +61,15 @@ def create_map_html(df, api_key, delivered_shops):
     """
     return html_code
 
+# Function to create a link for Google Maps route with custom markers
+def render_map(df, map_name):
+    latitudes = df['Latitude'].tolist()
+    longitudes = df['Longitude'].tolist()
+    labels = df['Party'].tolist()
+    
+    waypoints = '|'.join(f"{lat},{lon}" for lat, lon in zip(latitudes[1:-1], longitudes[1:-1]))
+    return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints={waypoints}"
+
 # Streamlit UI
 st.title("Delivery Optimization App with Google Maps Integration")
 
