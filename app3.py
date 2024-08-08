@@ -152,7 +152,7 @@ if uploaded_file:
                 }
             }
 
-    if st.button("Optimize Load", key='optimize_load'):
+    if st.button("Optimize Load"):
         result = optimize_load(len(D_a), len(D_b), len(D_c), cost_v1, cost_v2, cost_v3, v1_capacity, v2_capacity, v3_capacity, scenario)
         st.write("Load Optimization Results:")
         st.write(f"Status: {result['Status']}")
