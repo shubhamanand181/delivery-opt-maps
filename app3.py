@@ -229,7 +229,7 @@ if uploaded_file:
         names = df['Party'].tolist()
 
         markers = '|'.join(f"{lat},{lon}%7C{urllib.parse.quote_plus(name)}" for lat, lon, name in zip(latitudes, longitudes, names))
-        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints=" + markers
+        return f"https://www.google.com/maps/dir/?api=1&origin={latitudes[0]},{longitudes[0]}&destination={latitudes[-1]},{longitudes[-1]}&travelmode=driving&waypoints={markers}"
 
     def render_cluster_maps(df_locations):
         if 'vehicle_assignments' not in st.session_state:
