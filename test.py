@@ -28,7 +28,7 @@ def create_map_html(df, api_key):
             }});
         """)
     markers_js = "\n".join(markers)
-
+    
     html_code = f"""
     <!DOCTYPE html>
     <html>
