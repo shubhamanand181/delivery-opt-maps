@@ -19,12 +19,9 @@ st.title("Delivery Optimization App with Google Maps Integration")
 
 uploaded_file = st.file_uploader("Choose an Excel file", type="xlsx")
 if uploaded_file:
-    df_locations = pd.read_excel(uploaded_file)  # Ensure openpyxl is in requirements.txt
-    
-    # Display the column names to verify
+    df_locations = pd.read_excel(uploaded_file)
     st.write("Column Names:", df_locations.columns)
 
-    # Ensure column names are as expected
     expected_columns = ['Party', 'Latitude', 'Longitude', 'Weight (KG)']
     if all(col in df_locations.columns for col in expected_columns):
         st.write("All expected columns are present.")
@@ -32,10 +29,8 @@ if uploaded_file:
         st.write("One or more expected columns are missing. Please check the column names in the Excel file.")
         st.stop()
 
-    # Remove rows with NaN values in Latitude or Longitude
     df_locations.dropna(subset=['Latitude', 'Longitude'], inplace=True)
 
-    # Categorize weights
     def categorize_weights(df):
         D_a = df[(df['Weight (KG)'] > 0) & (df['Weight (KG)'] <= 2)]
         D_b = df[(df['Weight (KG)'] > 2) & (df['Weight (KG)'] <= 10)]
@@ -44,7 +39,6 @@ if uploaded_file:
 
     D_a, D_b, D_c = categorize_weights(df_locations)
 
-    # Load optimization
     cost_v1 = st.number_input("Enter cost for V1:", value=62.8156)
     cost_v2 = st.number_input("Enter cost for V2:", value=33.0)
     cost_v3 = st.number_input("Enter cost for V3:", value=29.0536)
@@ -62,7 +56,6 @@ if uploaded_file:
         if not solver:
             return None
 
-        # Variables
         V1 = solver.IntVar(0, solver.infinity(), 'V1')
         V2 = solver.IntVar(0, solver.infinity(), 'V2')
         V3 = solver.IntVar(0, solver.infinity(), 'V3')
@@ -74,7 +67,6 @@ if uploaded_file:
         B2 = solver.NumVar(0, solver.infinity(), 'B2')
         A3 = solver.NumVar(0, solver.infinity(), 'A3')
 
-        # Constraints
         solver.Add(A1 + A2 + A3 == D_a_count)
         solver.Add(B1 + B2 == D_b_count)
         solver.Add(C1 == D_c_count)
@@ -97,8 +89,8 @@ if uploaded_file:
             solver.Add(B2 == D_b_count - B1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A2 <= v2_capacity * V2 - B2)
-            solver.Add(V3 == 0)  # Ensure V3 is not used
-            solver.Add(A3 == 0)  # Ensure A3 is not used
+            solver.Add(V3 == 0)
+            solver.Add(A3 == 0)
         elif scenario == "Scenario 3: V1, V3":
             solver.Add(v1_capacity * V1 >= C1 + B1 + A1)
             solver.Add(v3_capacity * V3 >= A3)
@@ -106,11 +98,10 @@ if uploaded_file:
             solver.Add(B1 <= v1_capacity * V1 - C1)
             solver.Add(A1 <= v1_capacity * V1 - C1 - B1)
             solver.Add(A3 == D_a_count - A1)
-            solver.Add(V2 == 0)  # Ensure V2 is not used
-            solver.Add(B2 == 0)  # Ensure B2 is not used
-            solver.Add(A2 == 0)  # Ensure A2 is not used
+            solver.Add(V2 == 0)
+            solver.Add(B2 == 0)
+            solver.Add(A2 == 0)
 
-        # Objective
         solver.Minimize(cost_v1 * V1 + cost_v2 * V2 + cost_v3 * V3)
 
         status = solver.Solve()
@@ -173,6 +164,55 @@ if uploaded_file:
                 if i != j:
                     distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
         return distance_matrix
+
+    def generate_routes(vehicle_assignments, df_locations):
+        vehicle_routes = {}
+        summary_data = []
+
+        for vehicle, assignments in vehicle_assignments.items():
+            df_vehicle = df_locations.loc[assignments]
+
+            if df_vehicle.empty:
+                st.write(f"No assignments for {vehicle}")
+                continue
+
+            distance_matrix = calculate_distance_matrix(df_vehicle)
+            if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
+                st.write(f"Invalid values in distance matrix for {vehicle}")
+                continue
+
+            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+            db.fit(distance_matrix)
+
+            labels = db.labels_
+            df_vehicle['Cluster'] = labels
+
+            for cluster in set(labels):
+                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                if cluster_df.empty:
+                    continue
+                centroid = cluster_df[['Latitude', 'Longitude']].mean().values
+                total_distance = cluster_df.apply(lambda row: great_circle(centroid, (row['Latitude'], row['Longitude'])).kilometers, axis=1).sum()
+
+                route_name = f"{vehicle} Cluster {cluster}"
+                route_df = cluster_df.copy()
+                route_df['Distance'] = total_distance
+
+                if vehicle not in vehicle_routes:
+                    vehicle_routes[vehicle] = []
+
+                vehicle_routes[vehicle].append(route_df)
+                summary_data.append({
+                    'Vehicle': vehicle,
+                    'Cluster': cluster,
+                    'Centroid Latitude': centroid[0],
+                    'Centroid Longitude': centroid[1],
+                    'Number of Shops': len(cluster_df),
+                    'Total Distance': total_distance
+                })
+
+        summary_df = pd.DataFrame(summary_data)
+        return vehicle_routes, summary_df
 
     def generate_custom_map(df):
         map_html = f'''
