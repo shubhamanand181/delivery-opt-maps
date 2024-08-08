@@ -274,13 +274,13 @@ if uploaded_file:
                         st.session_state.delivered_shops.append(shop_index)
                         st.experimental_rerun()
 
-if st.button("Generate Routes", key='generate_routes'):
-    render_cluster_maps(df_locations)
+    if st.button("Generate Routes", key='generate_routes'):
+        render_cluster_maps(df_locations)
 
-# Display Summary of Clusters
-if not st.session_state.summary_df.empty:
-    st.write("Summary of Clusters:")
-    st.table(st.session_state.summary_df)
+    # Display Summary of Clusters
+    if not st.session_state.summary_df.empty:
+        st.write("Summary of Clusters:")
+        st.table(st.session_state.summary_df)
 
 def generate_excel(vehicle_routes, summary_df):
     file_path = 'optimized_routes.xlsx'
