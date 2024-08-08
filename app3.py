@@ -1,12 +1,12 @@
-import streamlit as st
-import streamlit.components.v1 as components
+import os
 import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
-import os
+import streamlit as st
+import streamlit.components.v1 as components
 
 # Load .env file
 load_dotenv()
@@ -183,7 +183,7 @@ if uploaded_file:
 
                 distance_matrix = calculate_distance_matrix(df_vehicle)
                 if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
-                    st.write(f"Invalid values in distance matrix for {vehicle}")
+                    st.write(f"Invalid values in distance_matrix for {vehicle}")
                     continue
 
                 db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
