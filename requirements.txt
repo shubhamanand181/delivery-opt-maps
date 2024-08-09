@@ -9,3 +9,5 @@ pyomo
 python-dotenv
 openpyxl
 xlsxwriter
+SQLAlchemy
+psycopg2-binary
