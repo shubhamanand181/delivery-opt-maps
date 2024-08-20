@@ -7,6 +7,9 @@ from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
 import streamlit.components.v1 as components
+import folium
+from folium.plugins import MarkerCluster
+from io import BytesIO
 
 # Load .env file
 load_dotenv()
@@ -159,12 +162,12 @@ if uploaded_file:
 
         vehicle_assignments = {
             "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])) + int(result['Deliveries assigned to V2'])].tolist(),
+            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):].tolist(),
             "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])) + int(result['Deliveries assigned to V2']):].tolist()
         }
         st.write("Vehicle Assignments:")
         st.write(vehicle_assignments)
-    
+
     # Clustering
     def cluster_locations(df):
         coords = df[['Latitude', 'Longitude']].values
@@ -174,8 +177,8 @@ if uploaded_file:
 
     df_locations = cluster_locations(df_locations)
 
-    # Generate map
-    def create_map(df):
+    # Generate map for each cluster
+    def create_map(df, cluster_id):
         map_html = '''
         <html>
         <head>
@@ -212,10 +215,30 @@ if uploaded_file:
 
         return map_html
 
+    # Create and display maps for each cluster
     if st.button("Generate Maps"):
         for cluster_id in df_locations['Cluster'].unique():
             cluster_df = df_locations[df_locations['Cluster'] == cluster_id]
-            cluster_map_html = create_map(cluster_df)
+            cluster_map_html = create_map(cluster_df, cluster_id)
+            st.write(f"Cluster {cluster_id} Map:")
             components.html(cluster_map_html, height=500)
 
         st.write("Maps have been generated for each cluster.")
+
+    # Excel download for each cluster
+    def download_excel(df, cluster_id):
+        buffer = BytesIO()
+        df[df['Cluster'] == cluster_id].to_excel(buffer, index=False)
+        buffer.seek(0)
+        return buffer
+
+    if st.button("Download Excel Files"):
+        for cluster_id in df_locations['Cluster'].unique():
+            cluster_df = df_locations[df_locations['Cluster'] == cluster_id]
+            buffer = download_excel(df_locations, cluster_id)
+            st.download_button(
+                label=f"Download Cluster {cluster_id} Excel",
+                data=buffer,
+                file_name=f"cluster_{cluster_id}_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
