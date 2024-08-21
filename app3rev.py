@@ -7,9 +7,27 @@ from ortools.linear_solver import pywraplp
 from dotenv import load_dotenv
 import streamlit as st
 import streamlit.components.v1 as components
-import folium
-from folium.plugins import MarkerCluster
-from io import BytesIO
+import psycopg2
+
+# Initial content before file upload
+st.title("Delivery Optimization App with Google Maps Integration")
+st.write("Please upload an Excel file to start the optimization process.")
+st.write("Ensure your file contains the following columns: Party, Latitude, Longitude, Weight (KG).")
+
+
+# Database connection parameters
+db_params = {
+    'dbname': 'mahayana-6004',
+    'user': 'postgres',  # Replace with your PostgreSQL username
+    'password': '6004',  # Replace with your PostgreSQL password
+    'host': 'localhost',  # or your database server address
+    'port': '5432'  # default PostgreSQL port
+}
+
+# Establish the connection
+conn = psycopg2.connect(**db_params)
+cursor = conn.cursor()
+print("Connected to the database.")
 
 # Load .env file
 load_dotenv()
@@ -37,6 +55,16 @@ if uploaded_file:
 
     # Remove rows with NaN values in Latitude or Longitude
     df_locations.dropna(subset=['Latitude', 'Longitude'], inplace=True)
+
+    def insert_order_data(shop_name, address, delivery_status, bill_amount, cash_collected, remaining_due, partner_id):
+        insert_query = """
+        INSERT INTO deliveries (shop_name, address, delivery_status, bill_amount, cash_collected, remaining_due, partner_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s);
+        """
+        data = (shop_name, address, delivery_status, bill_amount, cash_collected, remaining_due, partner_id)
+        cursor.execute(insert_query, data)
+        conn.commit()
+        print("Order data inserted into deliveries table.")
 
     # Categorize weights
     def categorize_weights(df):
@@ -162,83 +190,145 @@ if uploaded_file:
 
         vehicle_assignments = {
             "V1": D_c.index.tolist() + D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[:int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]))].tolist(),
-            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c))].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):].tolist(),
-            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])) + int(result['Deliveries assigned to V2']):].tolist()
+            "V2": D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):].tolist() + D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))])):int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):]))].tolist(),
+            "V3": D_a.index[int(result['Deliveries assigned to V1'] - len(D_c) - len(D_b.index[:int(result['Deliveries assigned to V1'] - len(D_c))]) + result['Deliveries assigned to V2'] - len(D_b.index[int(result['Deliveries assigned to V1'] - len(D_c)):])):].tolist()
         }
-        st.write("Vehicle Assignments:")
-        st.write(vehicle_assignments)
 
-    # Clustering
-    def cluster_locations(df):
-        coords = df[['Latitude', 'Longitude']].values
-        clustering = DBSCAN(eps=0.5, min_samples=2, metric='haversine').fit(np.radians(coords))
-        df['Cluster'] = clustering.labels_
-        return df
+        st.session_state.vehicle_assignments = vehicle_assignments
+        st.write("Vehicle Assignments:", vehicle_assignments)
 
-    df_locations = cluster_locations(df_locations)
+    def calculate_distance_matrix(df):
+        distance_matrix = np.zeros((len(df), len(df)))
+        for i, (lat1, lon1) in enumerate(zip(df['Latitude'], df['Longitude'])):
+            for j, (lat2, lon2) in enumerate(zip(df['Latitude'], df['Longitude'])):
+                if i != j:
+                    distance_matrix[i, j] = great_circle((lat1, lon1), (lat2, lon2)).kilometers
+        return distance_matrix
 
-    # Generate map for each cluster
-    def create_map(df, cluster_id):
-        map_html = '''
-        <html>
-        <head>
-        <script src="https://maps.googleapis.com/maps/api/js?key={}&callback=initMap" async defer></script>
-        <script>
-        var map;
-        function initMap() {{
-            map = new google.maps.Map(document.getElementById('map'), {{
-                center: {{lat: {}, lng: {}}},
-                zoom: 14
-            }});
+    def generate_routes(vehicle_assignments, df_locations):
+        vehicle_routes = {}
+        summary_data = []
 
-            var markers = {};
-            for (var i = 0; i < markers.length; i++) {{
+        for vehicle, assignments in vehicle_assignments.items():
+            df_vehicle = df_locations.loc[assignments]
+
+            if df_vehicle.empty:
+                st.write(f"No assignments for {vehicle}")
+                continue
+
+            distance_matrix = calculate_distance_matrix(df_vehicle)
+            if np.isnan(distance_matrix).any() or np.isinf(distance_matrix).any():
+                st.write(f"Invalid values in distance matrix for {vehicle}")
+                continue
+
+            db = DBSCAN(eps=0.5, min_samples=1, metric='precomputed')
+            db.fit(distance_matrix)
+
+            labels = db.labels_
+            df_vehicle['Cluster'] = labels
+
+            for cluster in set(labels):
+                cluster_df = df_vehicle[df_vehicle['Cluster'] == cluster]
+                if cluster_df.empty():
+                    continue
+                centroid = cluster_df[['Latitude', 'Longitude']].mean().values
+                total_distance = cluster_df.apply(lambda row: great_circle(centroid, (row['Latitude'], row['Longitude'])).kilometers, axis=1).sum()
+
+                route_name = f"{vehicle} Cluster {cluster}"
+                route_df = cluster_df.copy()
+                route_df['Distance'] = total_distance
+
+                if vehicle not in vehicle_routes:
+                    vehicle_routes[vehicle] = []
+
+                vehicle_routes[vehicle].append(route_df)
+                summary_data.append({
+                    'Vehicle': vehicle,
+                    'Cluster': cluster,
+                    'Centroid Latitude': centroid[0],
+                    'Centroid Longitude': centroid[1],
+                    'Number of Shops': len(cluster_df),
+                    'Total Distance': total_distance
+                })
+
+        summary_df = pd.DataFrame(summary_data)
+        return vehicle_routes, summary_df
+
+    def render_map(df, map_name):
+        markers = []
+        for index, row in df.iterrows():
+            markers.append(f"""
                 var marker = new google.maps.Marker({{
-                    position: new google.maps.LatLng(markers[i].lat, markers[i].lng),
+                    position: {{lat: {row['Latitude']}, lng: {row['Longitude']}}},
                     map: map,
-                    title: markers[i].name
+                    title: '{row['Party']}'
                 }});
-            }}
-        }}
-        </script>
-        </head>
-        <body>
-        <div id="map" style="height: 500px; width: 100%;"></div>
-        </body>
+                var infoWindow = new google.maps.InfoWindow({{
+                    content: '<b>{row['Party']}</b><br>Lat: {row['Latitude']}<br>Lng: {row['Longitude']}<br><a href="https://www.google.com/maps/dir/?api=1&destination={row['Latitude']},{row['Longitude']}" target="_blank">Navigate</a>'
+                }});
+                marker.addListener('click', function() {{
+                    infoWindow.open(map, marker);
+                }});
+            """)
+        markers_js = "\n".join(markers)
+
+        html_code = f"""
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Map - {map_name}</title>
+            <script src="https://maps.googleapis.com/maps/api/js?key={google_maps_api_key}&callback=initMap" async defer></script>
+            <script>
+              function initMap() {{
+                var map = new google.maps.Map(document.getElementById('map'), {{
+                  center: {{lat: {df['Latitude'].mean()}, lng: {df['Longitude'].mean()}}},
+                  zoom: 12
+                }});
+                {markers_js}
+              }}
+            </script>
+          </head>
+          <body>
+            <div id="map" style="height: 500px; width: 100%;"></div>
+          </body>
         </html>
-        '''.format(
-            google_maps_api_key,
-            df['Latitude'].mean(),
-            df['Longitude'].mean(),
-            df[['Latitude', 'Longitude', 'Party']].apply(lambda x: {'lat': x['Latitude'], 'lng': x['Longitude'], 'name': x['Party']}, axis=1).to_list()
-        )
+        """
+        return html_code
 
-        return map_html
+    def render_cluster_maps(df_locations):
+        if 'vehicle_assignments' not in st.session_state:
+            st.write("Please optimize the load first.")
+            return
 
-    # Create and display maps for each cluster
-    if st.button("Generate Maps"):
-        for cluster_id in df_locations['Cluster'].unique():
-            cluster_df = df_locations[df_locations['Cluster'] == cluster_id]
-            cluster_map_html = create_map(cluster_df, cluster_id)
-            st.write(f"Cluster {cluster_id} Map:")
-            components.html(cluster_map_html, height=500)
+        vehicle_assignments = st.session_state.vehicle_assignments
+        vehicle_routes, summary_df = generate_routes(vehicle_assignments, df_locations)
 
-        st.write("Maps have been generated for each cluster.")
+        for vehicle, routes in vehicle_routes.items():
+            for idx, route_df in enumerate(routes):
+                route_name = f"{vehicle} Cluster {idx}"
+                map_html = render_map(route_df, route_name)
+                st.write(f"Map for {route_name}:")
+                components.html(map_html, height=500)
 
-    # Excel download for each cluster
-    def download_excel(df, cluster_id):
-        buffer = BytesIO()
-        df[df['Cluster'] == cluster_id].to_excel(buffer, index=False)
-        buffer.seek(0)
-        return buffer
+        st.write("Summary of Clusters:")
+        st.table(summary_df)
 
-    if st.button("Download Excel Files"):
-        for cluster_id in df_locations['Cluster'].unique():
-            cluster_df = df_locations[df_locations['Cluster'] == cluster_id]
-            buffer = download_excel(df_locations, cluster_id)
-            st.download_button(
-                label=f"Download Cluster {cluster_id} Excel",
-                data=buffer,
-                file_name=f"cluster_{cluster_id}_data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        def generate_excel(vehicle_routes, summary_df):
+            file_path = 'optimized_routes.xlsx'
+            with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
+                for vehicle, routes in vehicle_routes.items():
+                    for idx, route_df in enumerate(routes):
+                        route_df.to_excel(writer, sheet_name=f'{vehicle}_Cluster_{idx}', index=False)
+                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            with open(file_path, "rb") as f:
+                st.download_button(
+                    label="Download Excel file",
+                    data=f,
+                    file_name="optimized_routes.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+        generate_excel(vehicle_routes, summary_df)
+
+    if st.button("Generate Routes"):
+        render_cluster_maps(df_locations)
